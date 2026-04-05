@@ -1,0 +1,11 @@
+id: yaml-test
+provider: openai
+model: gpt-4o-mini
+prompt: "Summarize: {{text}}"
+defaultVars:
+  text: "The quick brown fox jumped over the lazy dog."
+assertions:
+  - type: max-length
+    chars: 500
+  - type: min-length
+    chars: 5

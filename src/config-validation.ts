@@ -3,7 +3,7 @@ const VALID_ASSERTION_TYPES = [
   'contains', 'not-contains', 'contains-all', 'starts-with', 'ends-with',
   'matches-regex', 'max-length', 'min-length',
   'json-valid', 'json-schema', 'no-hallucination-words',
-  'no-duplicates', 'max-latency', 'custom',
+  'no-duplicates', 'max-latency', 'max-cost', 'llm-judge', 'custom',
 ];
 
 export interface ValidationResult {
@@ -117,6 +117,32 @@ export function validateConfig(config: unknown): ValidationResult {
         }
       }
 
+      if (type === 'max-cost') {
+        if (typeof a.dollars !== 'number' || a.dollars < 0) {
+          errors.push(`Assertion [${i}] "max-cost" requires "dollars" to be a non-negative number`);
+        }
+      }
+
+      if (type === 'llm-judge') {
+        if (!a.judge || typeof a.judge !== 'object') {
+          errors.push(`Assertion [${i}] "llm-judge" requires "judge" to be an object with { provider, model }`);
+        } else {
+          const j = a.judge as Record<string, unknown>;
+          if (!j.provider) {
+            errors.push(`Assertion [${i}] "llm-judge" judge requires "provider"`);
+          }
+          if (!j.model || typeof j.model !== 'string') {
+            errors.push(`Assertion [${i}] "llm-judge" judge requires "model" to be a string`);
+          }
+        }
+        if (!a.criteria || typeof a.criteria !== 'string') {
+          errors.push(`Assertion [${i}] "llm-judge" requires "criteria" to be a non-empty string`);
+        }
+        if (a.threshold !== undefined && (typeof a.threshold !== 'number' || a.threshold < 0 || a.threshold > 1)) {
+          errors.push(`Assertion [${i}] "llm-judge" threshold must be a number between 0 and 1`);
+        }
+      }
+
       if (type === 'custom') {
         if (typeof a.fn !== 'function') {
           errors.push(`Assertion [${i}] "custom" requires "fn" to be a function`);
@@ -130,8 +156,12 @@ export function validateConfig(config: unknown): ValidationResult {
 
   // Validate dataset if present
   if (c.dataset !== undefined) {
-    if (!Array.isArray(c.dataset)) {
-      errors.push('Config "dataset" must be an array of variable objects');
+    if (typeof c.dataset === 'string') {
+      if (!c.dataset.endsWith('.csv') && !c.dataset.endsWith('.json')) {
+        errors.push('Dataset file path must end with .csv or .json');
+      }
+    } else if (!Array.isArray(c.dataset)) {
+      errors.push('Config "dataset" must be an array of variable objects or a file path string (.csv/.json)');
     } else {
       for (let i = 0; i < c.dataset.length; i++) {
         if (typeof c.dataset[i] !== 'object' || c.dataset[i] === null) {

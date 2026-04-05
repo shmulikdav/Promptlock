@@ -2,6 +2,7 @@ import { AssertionConfig, AssertionResult } from '../types';
 import { builtinAssertions } from './builtin';
 import { assertJsonSchema } from './json-schema';
 import { assertCustom } from './custom';
+import { assertLlmJudge } from './llm-judge';
 
 export async function runAssertions(
   output: string,
@@ -12,6 +13,16 @@ export async function runAssertions(
   for (const assertion of assertions) {
     if (assertion.type === 'json-schema') {
       results.push(assertJsonSchema(output, assertion.schema));
+      continue;
+    }
+
+    if (assertion.type === 'llm-judge') {
+      results.push(await assertLlmJudge(
+        output,
+        assertion.judge,
+        assertion.criteria,
+        assertion.threshold ?? 0.7,
+      ));
       continue;
     }
 

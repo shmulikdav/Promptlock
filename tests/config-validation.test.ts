@@ -158,10 +158,21 @@ describe('validateConfig', () => {
     expect(result.errors[0]).toContain('ms');
   });
 
-  it('validates dataset field', () => {
-    const result = validateConfig(validConfig({ dataset: 'not-array' }));
+  it('validates dataset field rejects non-array non-path', () => {
+    const result = validateConfig(validConfig({ dataset: 123 }));
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain('dataset');
+  });
+
+  it('validates dataset file path must end with .csv or .json', () => {
+    const result = validateConfig(validConfig({ dataset: 'not-a-valid-file.txt' }));
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('.csv or .json');
+  });
+
+  it('accepts dataset as file path string', () => {
+    const result = validateConfig(validConfig({ dataset: 'data/inputs.csv' }));
+    expect(result.valid).toBe(true);
   });
 
   it('accepts valid dataset', () => {

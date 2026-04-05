@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-05
+
+### Added
+
+- **LLM-as-judge assertion** (`llm-judge`) — use a separate LLM to evaluate output quality with configurable criteria and threshold
+- **YAML/JSON config files** — auto-discovers `promptlock.yaml`/`.yml`/`.json` in project root; no more JS-only configs
+- **CSV/JSON dataset import** — `dataset: './data/test-inputs.csv'` loads external test data files
+- **Cost & token tracking** — captures token usage from OpenAI and Anthropic responses, estimates cost via built-in pricing table
+- **`max-cost` assertion** — fail if a prompt exceeds a dollar threshold (e.g. `{ type: 'max-cost', dollars: 0.05 }`)
+- **Markdown report format** — `--report markdown` generates GitHub-flavored markdown tables
+- **Watch mode** (`--watch`) — auto-reruns on config/prompt file changes with debounce
+- Cost summary in console, JSON, and HTML reports
+- `estimateCost()`, `getPricingTable()`, `loadDataset()`, `loadConfigFile()`, `discoverConfigFile()` exports
+
+### Changed
+
+- `LLMProvider` interface now supports optional `callWithMeta()` for token usage (backward compatible)
+- `dataset` field accepts file path strings (`.csv`, `.json`) in addition to inline arrays
+- Config loader scans for `.yaml`/`.yml` files in `prompts/` directory
+
 ## [0.2.0] - 2026-04-05
 
 ### Added

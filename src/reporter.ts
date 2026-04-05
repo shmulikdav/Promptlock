@@ -58,6 +58,13 @@ export function printConsoleReport(results: RunResult[]): void {
     }
   }
 
+  // Cost summary
+  const totalCost = results.reduce((sum, r) => sum + (r.cost ?? 0), 0);
+  const totalTokens = results.reduce((sum, r) => sum + (r.tokens?.totalTokens ?? 0), 0);
+  if (totalCost > 0 || totalTokens > 0) {
+    console.log(chalk.dim(`  Cost: $${totalCost.toFixed(6)} · ${totalTokens} tokens`));
+  }
+
   console.log('');
   if (failed > 0) {
     console.log(chalk.red(`Run complete. ${failed} failure${failed !== 1 ? 's' : ''}. Exit code: 1`));
@@ -105,6 +112,8 @@ export async function generateJsonReport(
       passed: r.passed,
       duration: r.duration,
       assertions: r.assertions,
+      tokens: r.tokens,
+      cost: r.cost,
       outputPreview: r.output.slice(0, 500),
       datasetResults: r.datasetResults?.map(d => ({
         vars: d.vars,
@@ -228,6 +237,69 @@ export async function generateHtmlReport(
 
   await ensureDir(outputDir);
   await fs.promises.writeFile(filePath, html, 'utf-8');
+  return filePath;
+}
+
+export async function generateMarkdownReport(
+  results: RunResult[],
+  outputDir: string = DEFAULT_REPORT_DIR,
+): Promise<string> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filePath = path.join(outputDir, `run-${timestamp}.md`);
+
+  const total = results.length;
+  const passed = results.filter(r => r.passed).length;
+  const failed = total - passed;
+  const totalCost = results.reduce((sum, r) => sum + (r.cost ?? 0), 0);
+  const totalTokens = results.reduce((sum, r) => sum + (r.tokens?.totalTokens ?? 0), 0);
+
+  let md = `# prompt-lock Report\n\n`;
+  md += `**${total}** prompts evaluated · **${passed}** passed · **${failed}** failed`;
+  if (totalCost > 0) {
+    md += ` · $${totalCost.toFixed(6)} · ${totalTokens} tokens`;
+  }
+  md += `\n\n`;
+
+  // Summary table
+  md += `| Prompt | Model | Status | Assertions | Duration |\n`;
+  md += `|--------|-------|--------|------------|----------|\n`;
+  for (const r of results) {
+    const status = r.passed ? 'Pass' : 'FAIL';
+    const assertPassed = r.assertions.filter(a => a.passed).length;
+    md += `| ${r.id} | ${r.model} | ${status} | ${assertPassed}/${r.assertions.length} | ${r.duration}ms |\n`;
+  }
+  md += `\n`;
+
+  // Per-prompt details
+  for (const r of results) {
+    const failedAssertions = r.assertions.filter(a => !a.passed);
+    if (failedAssertions.length > 0) {
+      md += `### ${r.id} — Failures\n\n`;
+      for (const a of failedAssertions) {
+        md += `- **${a.name}**`;
+        if (a.expected) md += `: expected ${a.expected}, got ${a.actual}`;
+        if (a.message) md += ` — ${a.message}`;
+        md += `\n`;
+      }
+      md += `\n`;
+    }
+
+    if (r.datasetResults && r.datasetResults.length > 0) {
+      const dsPassed = r.datasetResults.filter(d => d.passed).length;
+      md += `### ${r.id} — Dataset (${dsPassed}/${r.datasetResults.length})\n\n`;
+      md += `| # | Variables | Status | Duration |\n`;
+      md += `|---|-----------|--------|----------|\n`;
+      for (let i = 0; i < r.datasetResults.length; i++) {
+        const d = r.datasetResults[i];
+        const varsStr = Object.entries(d.vars).map(([k, v]) => `${k}="${v.slice(0, 30)}"`).join(', ');
+        md += `| ${i + 1} | ${varsStr} | ${d.passed ? 'Pass' : 'FAIL'} | ${d.duration}ms |\n`;
+      }
+      md += `\n`;
+    }
+  }
+
+  await ensureDir(outputDir);
+  await fs.promises.writeFile(filePath, md, 'utf-8');
   return filePath;
 }
 

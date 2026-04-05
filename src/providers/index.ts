@@ -1,4 +1,4 @@
-import { LLMProvider, ProviderConfig, PromptLockOptions } from '../types';
+import { LLMProvider, LLMCallResult, ProviderConfig, PromptLockOptions } from '../types';
 import { createOpenAIProvider } from './openai';
 import { createAnthropicProvider } from './anthropic';
 import { createCustomProvider } from './custom';
@@ -26,9 +26,17 @@ export function getProvider(providerConfig: ProviderConfig, model: string): LLMP
   }
 
   // Wrap so that model is always passed through
-  return {
+  const wrapped: LLMProvider = {
     async call(prompt: string, options?: PromptLockOptions): Promise<string> {
       return baseProvider.call(prompt, { ...options, model });
     },
   };
+
+  if (baseProvider.callWithMeta) {
+    wrapped.callWithMeta = async (prompt: string, options?: PromptLockOptions): Promise<LLMCallResult> => {
+      return baseProvider.callWithMeta!(prompt, { ...options, model });
+    };
+  }
+
+  return wrapped;
 }

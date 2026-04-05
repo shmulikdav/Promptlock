@@ -15,7 +15,9 @@ import {
   printDiffReport,
   generateJsonReport,
   generateHtmlReport,
+  generateMarkdownReport,
 } from './reporter';
+import { loadConfigFile, discoverConfigFile } from './config-loader';
 import { ensureDir, writeJsonFile, spinner } from './utils';
 
 const program = new Command();
@@ -23,7 +25,7 @@ const program = new Command();
 program
   .name('prompt-lock')
   .description('Version control and behavioral regression testing for LLM prompts')
-  .version('0.2.0');
+  .version('0.3.0');
 
 // ── init ──────────────────────────────────────────────────────────────────────
 
@@ -145,6 +147,7 @@ program
   .option('--cache', 'Cache LLM outputs (skip calls when prompt+model unchanged)')
   .option('--no-cache', 'Disable output caching')
   .option('--github-pr <pr>', 'Post results as a GitHub PR comment (e.g. owner/repo#123)')
+  .option('--watch', 'Watch for file changes and re-run automatically')
   .action(async (opts) => {
     const configs = await loadPromptConfigs(opts.config, opts.id);
 
@@ -209,6 +212,10 @@ program
         const p = await generateHtmlReport(results, reportDir);
         console.log(chalk.dim(`Report saved: ${p}`));
       }
+      if (format === 'markdown') {
+        const p = await generateMarkdownReport(results, reportDir);
+        console.log(chalk.dim(`Report saved: ${p}`));
+      }
     }
 
     // Post GitHub PR comment
@@ -242,6 +249,45 @@ program
     const anyFailed = results.some(r => !r.passed);
     if (anyFailed && (opts.ci || projectConfig?.ci?.failOnRegression)) {
       process.exitCode = 1;
+    }
+
+    // Watch mode
+    if (opts.watch) {
+      console.log('');
+      console.log(chalk.dim('Watching for changes... (press Ctrl+C to stop)'));
+
+      const promptsDir = path.join(process.cwd(), 'prompts');
+      const watchTargets = [promptsDir];
+      const discovered = await discoverConfigFile(process.cwd());
+      if (discovered) watchTargets.push(discovered);
+
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+      for (const target of watchTargets) {
+        try {
+          fs.watch(target, { recursive: true }, () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+              console.clear();
+              console.log(chalk.dim('Re-running...'));
+              try {
+                const reConfigs = await loadPromptConfigs(opts.config, opts.id);
+                const reResults = await runAll(reConfigs, runOpts);
+                printConsoleReport(reResults);
+              } catch (e) {
+                console.error(chalk.red(`Error: ${(e as Error).message}`));
+              }
+              console.log('');
+              console.log(chalk.dim('Watching for changes... (press Ctrl+C to stop)'));
+            }, 500);
+          });
+        } catch {
+          // Target doesn't exist, skip
+        }
+      }
+
+      // Keep process alive
+      await new Promise(() => {});
     }
   });
 
@@ -389,30 +435,40 @@ function loadProjectConfig(configPath?: string): PromptLockProjectConfig | null 
 }
 
 async function loadPromptConfigs(configPath?: string, filterId?: string): Promise<PromptLockConfig[]> {
+  const configs: PromptLockConfig[] = [];
+
+  // Try YAML/JSON config file first (auto-discovery)
+  const discovered = await discoverConfigFile(process.cwd());
+  if (discovered) {
+    try {
+      const loaded = await loadConfigFile(discovered);
+      const items = Array.isArray(loaded) ? loaded : [loaded];
+      configs.push(...items);
+    } catch (e) {
+      console.error(chalk.red(`Error loading ${discovered}: ${(e as Error).message}`));
+    }
+  }
+
+  // Also scan prompts/ directory for JS/JSON/YAML files
   const projectConfig = loadProjectConfig(configPath);
   const promptsDir = projectConfig?.promptsDir
     ? path.resolve(process.cwd(), projectConfig.promptsDir)
     : path.join(process.cwd(), 'prompts');
 
-  const configs: PromptLockConfig[] = [];
-
   try {
     const files = fs.readdirSync(promptsDir);
     for (const file of files) {
-      if (!file.endsWith('.js') && !file.endsWith('.json')) continue;
+      if (!['.js', '.json', '.yaml', '.yml'].some(ext => file.endsWith(ext))) continue;
 
       const filePath = path.join(promptsDir, file);
       try {
-        const mod = require(filePath);
-        const config = mod.default ?? mod;
-
-        const items = Array.isArray(config) ? config : (config && config.id) ? [config] : [];
+        const loaded = await loadConfigFile(filePath);
+        const items = Array.isArray(loaded) ? loaded : [loaded];
         for (const item of items) {
-          const validation = validateConfig(item);
-          if (!validation.valid) {
-            console.warn(chalk.yellow(`⚠️  ${file}: ${validation.errors.join('; ')}`));
+          // Avoid duplicates from auto-discovery
+          if (!configs.some(c => c.id === item.id)) {
+            configs.push(item);
           }
-          configs.push(item);
         }
       } catch (e) {
         console.error(chalk.red(`Error loading ${file}: ${(e as Error).message}`));

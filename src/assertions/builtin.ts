@@ -167,6 +167,18 @@ export const builtinAssertions: Record<string, AssertionHandler> = {
     };
   },
 
+  'max-cost': (output, config) => {
+    const dollars = config.dollars as number;
+    const actual = (config.__cost as number) ?? 0;
+    return {
+      type: 'max-cost',
+      name: `max-cost $${dollars}`,
+      passed: actual <= dollars,
+      expected: `<= $${dollars}`,
+      actual: `$${actual.toFixed(6)}`,
+    };
+  },
+
   'no-hallucination-words': (output, config) => {
     const words = (config.words as string[] | undefined) ?? DEFAULT_HALLUCINATION_WORDS;
     const found = words.filter(w => output.includes(w));

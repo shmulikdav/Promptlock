@@ -13,6 +13,19 @@ export interface CustomProviderConfig {
   responsePath?: string;
 }
 
+// ── Token & Cost Tracking ───────────────────────────────────────────────────
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface LLMCallResult {
+  text: string;
+  usage?: TokenUsage;
+}
+
 // ── Prompt Config ────────────────────────────────────────────────────────────
 
 export interface PromptLockConfig {
@@ -22,7 +35,7 @@ export interface PromptLockConfig {
   model: string;
   prompt: string;
   defaultVars?: Record<string, string>;
-  dataset?: Record<string, string>[];
+  dataset?: Record<string, string>[] | string;
   assertions: AssertionConfig[];
   options?: PromptLockOptions;
 }
@@ -35,7 +48,7 @@ export interface PromptLockOptions {
   concurrency?: number;
 }
 
-// ── Assertions ─────────���─────────────────────────────��───────────────────────
+// ── Assertions ──────────────────────────────────────────────────────────────
 
 export type AssertionConfig =
   | { type: 'contains'; value: string }
@@ -51,6 +64,8 @@ export type AssertionConfig =
   | { type: 'no-hallucination-words'; words?: string[] }
   | { type: 'no-duplicates'; separator?: string }
   | { type: 'max-latency'; ms: number }
+  | { type: 'max-cost'; dollars: number }
+  | { type: 'llm-judge'; judge: { provider: ProviderConfig; model: string }; criteria: string; threshold?: number }
   | { type: 'custom'; name: string; fn: (output: string) => boolean | Promise<boolean> };
 
 export interface AssertionResult {
@@ -62,7 +77,7 @@ export interface AssertionResult {
   message?: string;
 }
 
-// ── Run Result ───────────────────────────────────��───────────────────────────
+// ── Run Result ──────────────────────────────────────────────────────────────
 
 export interface RunResult {
   id: string;
@@ -77,6 +92,8 @@ export interface RunResult {
   passed: boolean;
   duration: number;
   timestamp: string;
+  tokens?: TokenUsage;
+  cost?: number;
   datasetResults?: DatasetRunResult[];
 }
 
@@ -86,6 +103,8 @@ export interface DatasetRunResult {
   assertions: AssertionResult[];
   passed: boolean;
   duration: number;
+  tokens?: TokenUsage;
+  cost?: number;
 }
 
 // ── Snapshot ─────────────────────────────────────────────────────────────────
@@ -101,7 +120,7 @@ export interface SnapshotData {
   assertionResults: AssertionResult[];
 }
 
-// ── Diff ──���───────────────────────────────��──────────────────────────────────
+// ── Diff ─────────────────────────────────────────────────────────────────────
 
 export interface DiffResult {
   id: string;
@@ -117,7 +136,7 @@ export interface DiffChange {
   value: string;
 }
 
-// ── Project Config ───────────��───────────────────────────────────────────────
+// ── Project Config ──────────────────────────────────────────────────────────
 
 export interface PromptLockProjectConfig {
   promptsDir: string;
@@ -127,12 +146,13 @@ export interface PromptLockProjectConfig {
   defaultModel?: string;
   ci: {
     failOnRegression: boolean;
-    reportFormat: ('json' | 'html')[];
+    reportFormat: ('json' | 'html' | 'markdown')[];
   };
 }
 
-// ── Provider Interface ───────────��─────────────────────────��─────────────────
+// ── Provider Interface ──────────────────────────────────────────────────────
 
 export interface LLMProvider {
   call(prompt: string, options?: PromptLockOptions & { model?: string }): Promise<string>;
+  callWithMeta?(prompt: string, options?: PromptLockOptions & { model?: string }): Promise<LLMCallResult>;
 }

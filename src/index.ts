@@ -2,7 +2,7 @@ import { PromptLockConfig, RunResult, DiffResult, SnapshotData } from './types';
 import { runPrompt, runAll, RunOptions } from './runner';
 import { RetryOptions } from './retry';
 import { saveSnapshot, loadSnapshot, loadSnapshotHistory, diffSnapshots } from './snapshot';
-import { printConsoleReport, generateJsonReport, generateHtmlReport } from './reporter';
+import { printConsoleReport, generateJsonReport, generateHtmlReport, generateMarkdownReport } from './reporter';
 
 export interface PromptLockInstanceOptions {
   snapshotDir?: string;
@@ -70,7 +70,7 @@ export class PromptLock {
     return loadSnapshotHistory(id, dir);
   }
 
-  async report(format: 'json' | 'html' | 'console' = 'console', reportDir?: string): Promise<void> {
+  async report(format: 'json' | 'html' | 'markdown' | 'console' = 'console', reportDir?: string): Promise<void> {
     const dir = reportDir ?? this.reportDir;
     const results = await this.run();
 
@@ -85,6 +85,11 @@ export class PromptLock {
       }
       case 'html': {
         const p = await generateHtmlReport(results, dir);
+        console.log(`Report saved: ${p}`);
+        break;
+      }
+      case 'markdown': {
+        const p = await generateMarkdownReport(results, dir);
         console.log(`Report saved: ${p}`);
         break;
       }
@@ -104,7 +109,11 @@ export {
   printDiffReport,
   generateJsonReport,
   generateHtmlReport,
+  generateMarkdownReport,
 } from './reporter';
+export { estimateCost, getPricingTable } from './pricing';
+export { loadDataset } from './dataset-loader';
+export { loadConfigFile, discoverConfigFile } from './config-loader';
 export { validateConfig } from './config-validation';
 export { OutputCache } from './cache';
 export { withRetry } from './retry';

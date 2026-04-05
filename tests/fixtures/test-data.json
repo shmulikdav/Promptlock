@@ -1,0 +1,5 @@
+[
+  { "text": "Hello world", "language": "en" },
+  { "text": "Bonjour le monde", "language": "fr" },
+  { "text": "Hola mundo", "language": "es" }
+]
