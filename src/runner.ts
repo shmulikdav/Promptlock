@@ -3,14 +3,69 @@ import { getProvider } from './providers';
 import { runAssertions } from './assertions';
 import { renderTemplate, hashString } from './utils';
 import { validateConfig } from './config-validation';
+import { OutputCache } from './cache';
+import { withRetry, RetryOptions } from './retry';
 
 export interface RunOptions {
   dryRun?: boolean;
   verbose?: boolean;
   parallel?: boolean;
   concurrency?: number;
+  cache?: boolean;
+  cacheDir?: string;
+  retry?: Partial<RetryOptions>;
   onResult?: (result: RunResult) => void;
   onProgress?: (id: string, status: string) => void;
+}
+
+let sharedCache: OutputCache | null = null;
+
+function getCache(opts?: RunOptions): OutputCache | null {
+  if (opts?.cache === false) return null;
+  if (!opts?.cache) return null;
+  if (!sharedCache) {
+    sharedCache = new OutputCache(opts.cacheDir);
+  }
+  return sharedCache;
+}
+
+async function callWithCacheAndRetry(
+  provider: import('./types').LLMProvider,
+  prompt: string,
+  model: string,
+  opts?: RunOptions,
+  providerOpts?: import('./types').PromptLockOptions,
+): Promise<{ output: string; cached: boolean }> {
+  const cache = getCache(opts);
+
+  // Check cache
+  if (cache) {
+    const cached = await cache.get(prompt, model);
+    if (cached !== null) {
+      if (opts?.verbose) {
+        process.stderr.write(`  [cache] HIT for ${model}:${prompt.slice(0, 50)}...\n`);
+      }
+      return { output: cached, cached: true };
+    }
+  }
+
+  // Call with retry
+  const output = await withRetry(
+    () => provider.call(prompt, providerOpts),
+    opts?.retry,
+    opts?.verbose
+      ? (attempt, error, delay) => {
+          process.stderr.write(`  [retry] attempt ${attempt}: ${error.message} — retrying in ${delay}ms\n`);
+        }
+      : undefined,
+  );
+
+  // Save to cache
+  if (cache) {
+    await cache.set(prompt, model, output);
+  }
+
+  return { output, cached: false };
 }
 
 export async function runPrompt(config: PromptLockConfig, opts?: RunOptions): Promise<RunResult> {
@@ -44,12 +99,8 @@ export async function runPrompt(config: PromptLockConfig, opts?: RunOptions): Pr
     ? renderTemplate(config.prompt, config.defaultVars)
     : config.prompt;
 
-  let output: string;
-  const duration = Date.now() - startTime;
-
   if (opts?.dryRun) {
-    // Dry run: skip LLM call, run assertions against empty string
-    output = '[DRY RUN — no LLM call made]';
+    const output = '[DRY RUN — no LLM call made]';
     const assertionResults = await runAssertionsWithLatency(output, config.assertions, 0);
     return {
       id: config.id,
@@ -67,15 +118,16 @@ export async function runPrompt(config: PromptLockConfig, opts?: RunOptions): Pr
     };
   }
 
-  // Get provider and call LLM
+  // Get provider and call LLM (with cache + retry)
   opts?.onProgress?.(config.id, 'calling LLM...');
   const provider = getProvider(config.provider, config.model);
   const callStart = Date.now();
-  output = await provider.call(renderedPrompt, config.options);
+  const { output, cached } = await callWithCacheAndRetry(provider, renderedPrompt, config.model, opts, config.options);
   const callDuration = Date.now() - callStart;
 
   if (opts?.verbose) {
-    process.stderr.write(`  [verbose] ${config.id}: LLM responded in ${callDuration}ms (${output.length} chars)\n`);
+    const src = cached ? 'cached' : 'live';
+    process.stderr.write(`  [verbose] ${config.id}: ${src} response in ${callDuration}ms (${output.length} chars)\n`);
   }
 
   // Run assertions (inject latency for max-latency)
@@ -92,12 +144,12 @@ export async function runPrompt(config: PromptLockConfig, opts?: RunOptions): Pr
     for (const vars of config.dataset) {
       const dsPrompt = renderTemplate(config.prompt, vars);
       const dsStart = Date.now();
-      const dsOutput = await provider.call(dsPrompt, config.options);
+      const dsResult = await callWithCacheAndRetry(provider, dsPrompt, config.model, opts, config.options);
       const dsDuration = Date.now() - dsStart;
-      const dsAssertions = await runAssertionsWithLatency(dsOutput, config.assertions, dsDuration);
+      const dsAssertions = await runAssertionsWithLatency(dsResult.output, config.assertions, dsDuration);
       datasetResults.push({
         vars,
-        output: dsOutput,
+        output: dsResult.output,
         assertions: dsAssertions,
         passed: dsAssertions.every(r => r.passed),
         duration: dsDuration,
@@ -197,7 +249,6 @@ async function runAssertionsWithLatency(
   assertions: AssertionConfig[],
   durationMs: number,
 ): Promise<import('./types').AssertionResult[]> {
-  // Inject __duration into max-latency assertion configs
   const enriched = assertions.map(a =>
     a.type === 'max-latency'
       ? { ...a, __duration: durationMs }

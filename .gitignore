@@ -2,6 +2,7 @@ node_modules/
 dist/
 .promptlock/snapshots/
 .promptlock/reports/
+.promptlock/cache/
 .env
 *.tgz
 .promptlock-demo/

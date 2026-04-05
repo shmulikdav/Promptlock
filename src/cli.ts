@@ -7,6 +7,8 @@ import chalk from 'chalk';
 import { PromptLockConfig, PromptLockProjectConfig } from './types';
 import { validateConfig } from './config-validation';
 import { runAll, RunOptions } from './runner';
+import { postPRComment } from './github';
+import { OutputCache } from './cache';
 import { saveSnapshot, loadSnapshot, loadSnapshotHistory, diffSnapshots } from './snapshot';
 import {
   printConsoleReport,
@@ -140,6 +142,9 @@ program
   .option('--verbose', 'Show detailed output for each prompt run')
   .option('--parallel', 'Run prompts in parallel')
   .option('--concurrency <n>', 'Max concurrent runs (default: 5)', parseInt)
+  .option('--cache', 'Cache LLM outputs (skip calls when prompt+model unchanged)')
+  .option('--no-cache', 'Disable output caching')
+  .option('--github-pr <pr>', 'Post results as a GitHub PR comment (e.g. owner/repo#123)')
   .action(async (opts) => {
     const configs = await loadPromptConfigs(opts.config, opts.id);
 
@@ -162,10 +167,18 @@ program
       return;
     }
 
+    const projectConfig = loadProjectConfig(opts.config);
+    const cacheDir = projectConfig?.snapshotDir
+      ? path.join(path.dirname(projectConfig.snapshotDir), 'cache')
+      : '.promptlock/cache';
+
     const runOpts: RunOptions = {
       verbose: opts.verbose,
       parallel: opts.parallel,
       concurrency: opts.concurrency,
+      cache: opts.cache ?? false,
+      cacheDir,
+      retry: { maxRetries: 3 },
     };
 
     const spin = spinner(`Running ${configs.length} prompt${configs.length !== 1 ? 's' : ''}...`);
@@ -174,7 +187,14 @@ program
 
     printConsoleReport(results);
 
-    const projectConfig = loadProjectConfig(opts.config);
+    // Show cache stats if caching was enabled
+    if (runOpts.cache) {
+      const cache = new OutputCache(cacheDir);
+      const stats = await cache.stats();
+      if (stats.entries > 0) {
+        console.log(chalk.dim(`Cache: ${stats.entries} entries (${(stats.sizeBytes / 1024).toFixed(1)}KB)`));
+      }
+    }
 
     // Generate reports
     const reportFormats = parseReportFormats(opts.report, projectConfig);
@@ -188,6 +208,33 @@ program
       if (format === 'html') {
         const p = await generateHtmlReport(results, reportDir);
         console.log(chalk.dim(`Report saved: ${p}`));
+      }
+    }
+
+    // Post GitHub PR comment
+    if (opts.githubPr) {
+      const ghToken = process.env.GITHUB_TOKEN;
+      if (!ghToken) {
+        console.log(chalk.yellow('⚠️  --github-pr requires GITHUB_TOKEN environment variable'));
+      } else {
+        const parsed = parseGitHubPR(opts.githubPr);
+        if (parsed) {
+          try {
+            await postPRComment({
+              token: ghToken,
+              owner: parsed.owner,
+              repo: parsed.repo,
+              prNumber: parsed.pr,
+              results,
+              updateExisting: true,
+            });
+            console.log(chalk.green(`✅ Posted results to ${opts.githubPr}`));
+          } catch (e) {
+            console.log(chalk.red(`❌ Failed to post PR comment: ${(e as Error).message}`));
+          }
+        } else {
+          console.log(chalk.yellow('⚠️  Invalid --github-pr format. Use: owner/repo#123'));
+        }
       }
     }
 
@@ -303,6 +350,32 @@ program
     }
   });
 
+// ── cache ─────────────────────────────────────────────────────────────────────
+
+program
+  .command('cache')
+  .description('Manage the output cache')
+  .argument('<action>', '"clear" or "stats"')
+  .option('--config <path>', 'Path to config file')
+  .action(async (action, opts) => {
+    const projectConfig = loadProjectConfig(opts.config);
+    const cacheDir = projectConfig?.snapshotDir
+      ? path.join(path.dirname(projectConfig.snapshotDir), 'cache')
+      : '.promptlock/cache';
+    const cache = new OutputCache(cacheDir);
+
+    if (action === 'clear') {
+      await cache.clear();
+      console.log(chalk.green('✅ Cache cleared.'));
+    } else if (action === 'stats') {
+      const stats = await cache.stats();
+      console.log(`Cache: ${stats.entries} entries, ${(stats.sizeBytes / 1024).toFixed(1)}KB`);
+      console.log(chalk.dim(`Location: ${cacheDir}`));
+    } else {
+      console.log(chalk.yellow(`Unknown action "${action}". Use "clear" or "stats".`));
+    }
+  });
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function loadProjectConfig(configPath?: string): PromptLockProjectConfig | null {
@@ -365,6 +438,13 @@ function parseReportFormats(
     return [cliFormat];
   }
   return projectConfig?.ci?.reportFormat ?? [];
+}
+
+function parseGitHubPR(value: string): { owner: string; repo: string; pr: number } | null {
+  // Format: owner/repo#123
+  const match = value.match(/^([^/]+)\/([^#]+)#(\d+)$/);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2], pr: parseInt(match[3]) };
 }
 
 program.parse();

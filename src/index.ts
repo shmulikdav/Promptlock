@@ -99,4 +99,9 @@ export {
   generateHtmlReport,
 } from './reporter';
 export { validateConfig } from './config-validation';
+export { OutputCache } from './cache';
+export { withRetry } from './retry';
+export type { RetryOptions } from './retry';
+export { postPRComment } from './github';
+export type { GitHubCommentOptions } from './github';
 export * from './types';

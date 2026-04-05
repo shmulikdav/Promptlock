@@ -172,6 +172,8 @@ prompt-lock run --dry-run          # Show what would be tested without calling L
 prompt-lock run --verbose          # Show detailed output per prompt
 prompt-lock run --parallel         # Run prompts in parallel
 prompt-lock run --concurrency 10   # Max concurrent runs (default: 5)
+prompt-lock run --cache            # Cache LLM outputs (skip unchanged prompts)
+prompt-lock run --github-pr owner/repo#123  # Post results as PR comment
 ```
 
 ### `prompt-lock snapshot`
@@ -199,6 +201,45 @@ View snapshot history for a prompt.
 ```bash
 prompt-lock history my-prompt
 ```
+
+### `prompt-lock cache`
+
+Manage the output cache (used with `--cache` flag).
+
+```bash
+prompt-lock cache stats            # Show cache size and entries
+prompt-lock cache clear            # Clear all cached outputs
+```
+
+### Output Caching
+
+Use `--cache` to skip LLM calls for prompts that haven't changed. Cached outputs are stored in `.promptlock/cache/` and keyed by prompt text + model name.
+
+```bash
+# First run: calls the LLM, saves to cache
+prompt-lock run --cache
+
+# Second run: uses cache, instant results
+prompt-lock run --cache
+
+# Clear cache when you want fresh results
+prompt-lock cache clear
+```
+
+### Retry Logic
+
+All LLM provider calls automatically retry on transient errors (rate limits, timeouts, network errors) with exponential backoff. Default: 3 retries. Use `--verbose` to see retry activity.
+
+### GitHub PR Comments
+
+Post test results directly to a GitHub pull request:
+
+```bash
+export GITHUB_TOKEN=your-token
+prompt-lock run --ci --github-pr owner/repo#123
+```
+
+This posts a markdown table with pass/fail results and failure details. If a comment already exists, it updates in place.
 
 ## Assertion Reference
 
@@ -266,12 +307,16 @@ jobs:
         with:
           node-version: '20'
       - run: npm install
-      - run: npx prompt-lock run --ci
+      - run: npx prompt-lock run --ci --cache --github-pr ${{ github.repository }}#${{ github.event.pull_request.number }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-The `--ci` flag (or `failOnRegression: true` in config) ensures exit code 1 when any assertion fails.
+- `--ci` ensures exit code 1 when any assertion fails
+- `--cache` skips LLM calls for unchanged prompts (faster, cheaper)
+- `--github-pr` posts results as a PR comment with pass/fail table
+- Automatic retry on rate limits and transient errors (3 retries with exponential backoff)
 
 ## Configuration
 
