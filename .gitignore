@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.promptlock/snapshots/
+.promptlock/reports/
+.env
+*.tgz
