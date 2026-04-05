@@ -61,7 +61,33 @@ npx prompt-lock snapshot
 
 ## Defining Prompts
 
-Create `.js` files in your `prompts/` directory. You can export a single config or an array of configs:
+Create config files as `.js`, `.yaml`, `.yml`, or `.json`. prompt-lock auto-discovers `promptlock.yaml` in your project root, or scans the `prompts/` directory.
+
+### YAML Config (recommended)
+
+```yaml
+# promptlock.yaml
+id: article-summarizer
+version: '1.0.0'
+provider: anthropic
+model: claude-sonnet-4-20250514
+prompt: |
+  Summarize the following article in 3 bullet points.
+  Article: {{article}}
+defaultVars:
+  article: The quick brown fox jumped over the lazy dog.
+assertions:
+  - type: contains
+    value: '•'
+  - type: max-length
+    chars: 500
+  - type: max-cost
+    dollars: 0.05
+```
+
+### JavaScript Config
+
+Create `.js` files in your `prompts/` directory:
 
 ```javascript
 // prompts/summarizer.js
@@ -112,7 +138,7 @@ module.exports = {
 
 ### Testing with Datasets
 
-Test a prompt against multiple inputs:
+Test a prompt against multiple inputs — inline or from external CSV/JSON files:
 
 ```javascript
 module.exports = {
@@ -121,14 +147,53 @@ module.exports = {
   model: 'gpt-4o-mini',
   prompt: 'Classify this ticket: {{ticket}}',
   defaultVars: { ticket: 'My payment failed' },
+
+  // Inline dataset
   dataset: [
     { ticket: 'My payment failed' },
     { ticket: 'How do I reset my password?' },
     { ticket: 'Your product is great!' },
   ],
+
+  // Or load from a file:
+  // dataset: './data/test-tickets.csv',
+  // dataset: './data/test-tickets.json',
+
   assertions: [
     { type: 'json-valid' },
     { type: 'max-latency', ms: 5000 },
+  ],
+};
+```
+
+CSV files use the first row as headers (= template variable names):
+
+```csv
+ticket,expected_category
+My payment failed,billing
+How do I reset my password?,account
+Your product is great!,feedback
+```
+
+### LLM-as-Judge
+
+Use a separate LLM to evaluate output quality:
+
+```javascript
+module.exports = {
+  id: 'creative-writer',
+  provider: 'anthropic',
+  model: 'claude-sonnet-4-20250514',
+  prompt: 'Write a haiku about {{topic}}',
+  defaultVars: { topic: 'coding' },
+  assertions: [
+    { type: 'max-length', chars: 200 },
+    {
+      type: 'llm-judge',
+      judge: { provider: 'openai', model: 'gpt-4o-mini' },
+      criteria: 'Is this a valid haiku with 5-7-5 syllable structure?',
+      threshold: 0.7,  // pass if score >= 0.7
+    },
   ],
 };
 ```
@@ -171,12 +236,14 @@ prompt-lock run --id my-prompt     # Run a specific prompt
 prompt-lock run --ci               # Exit code 1 on failure
 prompt-lock run --report html      # Generate HTML report
 prompt-lock run --report json      # Generate JSON report
-prompt-lock run --report both      # Generate both reports
+prompt-lock run --report markdown  # Generate Markdown report
+prompt-lock run --report both      # Generate JSON + HTML reports
 prompt-lock run --dry-run          # Show what would be tested without calling LLMs
 prompt-lock run --verbose          # Show detailed output per prompt
 prompt-lock run --parallel         # Run prompts in parallel
 prompt-lock run --concurrency 10   # Max concurrent runs (default: 5)
 prompt-lock run --cache            # Cache LLM outputs (skip unchanged prompts)
+prompt-lock run --watch            # Watch for file changes and re-run
 prompt-lock run --github-pr owner/repo#123  # Post results as PR comment
 ```
 
@@ -230,6 +297,34 @@ prompt-lock run --cache
 prompt-lock cache clear
 ```
 
+### Cost & Token Tracking
+
+prompt-lock automatically tracks token usage and estimates cost for OpenAI and Anthropic calls. Costs are shown in console output and included in all report formats.
+
+```bash
+prompt-lock run --verbose   # Shows per-prompt token counts and cost
+```
+
+Use the `max-cost` assertion to enforce budget limits:
+
+```yaml
+assertions:
+  - type: max-cost
+    dollars: 0.05
+```
+
+Built-in pricing for GPT-4o, GPT-4o-mini, Claude Sonnet 4, Claude Haiku, and more. Unknown models show zero cost.
+
+### Watch Mode
+
+Auto-rerun on file changes during prompt development:
+
+```bash
+prompt-lock run --watch
+```
+
+Watches your config files and `prompts/` directory. Debounces rapid changes (500ms).
+
 ### Retry Logic
 
 All LLM provider calls automatically retry on transient errors (rate limits, timeouts, network errors) with exponential backoff. Default: 3 retries. Use `--verbose` to see retry activity.
@@ -262,7 +357,9 @@ This posts a markdown table with pass/fail results and failure details. If a com
 | `no-hallucination-words` | `words?: string[]` | Output does NOT contain hallucination indicators |
 | `no-duplicates` | `separator?: string` | Output has no duplicate items (split by separator, default `\n`) |
 | `max-latency` | `ms: number` | LLM response time is under N milliseconds |
-| `custom` | `name: string, fn: (output) => boolean` | User-provided function returning boolean |
+| `max-cost` | `dollars: number` | LLM call cost is under N dollars |
+| `llm-judge` | `judge: {provider, model}, criteria: string, threshold?: number` | Another LLM scores output quality (0-1) |
+| `custom` | `name: string, fn: (output) => boolean` | User-provided function returning boolean (JS configs only) |
 
 ## Provider Setup
 
