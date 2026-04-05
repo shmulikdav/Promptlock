@@ -3,6 +3,7 @@
 **Version control and behavioral regression testing for LLM prompts.**
 
 prompt-lock wraps your prompts with behavioral assertions and snapshot baselines. On every change, it runs the assertion suite and flags regressions — like Jest for LLM behavior.
+The lightweight, code-first alternative to promptfoo. TypeScript-native. Works with any LLM endpoint. Zero cloud dependencies.
 
 ## Demo
 
