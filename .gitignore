@@ -4,3 +4,5 @@ dist/
 .promptlock/reports/
 .env
 *.tgz
+.promptlock-demo/
+demo.gif

@@ -4,6 +4,19 @@
 
 prompt-lock wraps your prompts with behavioral assertions and snapshot baselines. On every change, it runs the assertion suite and flags regressions — like Jest for LLM behavior.
 
+## Demo
+
+Run the demo without any API keys to see prompt-lock in action:
+
+```bash
+git clone https://github.com/shmulikdav/Promptlock.git
+cd Promptlock
+npm install && npm run build
+node demo.js
+```
+
+This runs 4 simulated prompts (2 passing, 2 failing), saves snapshots, shows diffs, and generates an HTML report — all with mock LLM outputs.
+
 ## Installation
 
 ```bash
