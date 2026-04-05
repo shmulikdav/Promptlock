@@ -23,7 +23,7 @@ const program = new Command();
 program
   .name('prompt-lock')
   .description('Version control and behavioral regression testing for LLM prompts')
-  .version('0.1.0');
+  .version('0.2.0');
 
 // ── init ──────────────────────────────────────────────────────────────────────
 

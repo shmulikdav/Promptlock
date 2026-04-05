@@ -102,6 +102,32 @@ describe('loadSnapshotHistory', () => {
   });
 });
 
+describe('snapshot ID sanitization', () => {
+  it('sanitizes path traversal characters in ID', async () => {
+    const result = makeRunResult({ id: '../../etc/evil' });
+    const filePath = await saveSnapshot(result, TEST_SNAPSHOT_DIR);
+
+    // Should NOT write outside the snapshot dir
+    expect(filePath).toContain(TEST_SNAPSHOT_DIR);
+    expect(filePath).not.toContain('..');
+    expect(filePath).toContain('______etc_evil');
+  });
+
+  it('sanitizes slashes in ID', async () => {
+    const result = makeRunResult({ id: 'my/prompt/name' });
+    const filePath = await saveSnapshot(result, TEST_SNAPSHOT_DIR);
+
+    expect(filePath).toContain('my_prompt_name');
+    expect(filePath).not.toContain('my/prompt');
+  });
+
+  it('preserves safe characters', async () => {
+    const result = makeRunResult({ id: 'my-prompt_v2' });
+    const filePath = await saveSnapshot(result, TEST_SNAPSHOT_DIR);
+    expect(filePath).toContain('my-prompt_v2');
+  });
+});
+
 describe('diffSnapshots', () => {
   it('shows no changes when outputs are identical', () => {
     const snapshot: SnapshotData = {

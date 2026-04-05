@@ -1,9 +1,22 @@
 {
   "name": "prompt-lock",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Version control and behavioral regression testing for LLM prompts",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "bin": {
     "prompt-lock": "dist/cli.js",
     "promptlock": "dist/cli.js"
@@ -11,7 +24,8 @@
   "scripts": {
     "build": "tsc",
     "test": "jest",
-    "prepublishOnly": "npm run build"
+    "demo": "npm run build && node demo.js",
+    "prepublishOnly": "npm run build && npm test"
   },
   "repository": {
     "type": "git",

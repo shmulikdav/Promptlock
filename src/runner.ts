@@ -18,15 +18,9 @@ export interface RunOptions {
   onProgress?: (id: string, status: string) => void;
 }
 
-let sharedCache: OutputCache | null = null;
-
 function getCache(opts?: RunOptions): OutputCache | null {
-  if (opts?.cache === false) return null;
   if (!opts?.cache) return null;
-  if (!sharedCache) {
-    sharedCache = new OutputCache(opts.cacheDir);
-  }
-  return sharedCache;
+  return new OutputCache(opts.cacheDir);
 }
 
 async function callWithCacheAndRetry(
@@ -204,11 +198,11 @@ async function runParallel(
   opts?: RunOptions,
 ): Promise<RunResult[]> {
   const results: RunResult[] = new Array(configs.length);
-  let index = 0;
+  const queue = [...configs.keys()]; // [0, 1, 2, ...]
 
   async function worker() {
-    while (index < configs.length) {
-      const i = index++;
+    while (queue.length > 0) {
+      const i = queue.shift()!;
       results[i] = await runSafe(configs[i], opts);
       opts?.onResult?.(results[i]);
     }

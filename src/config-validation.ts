@@ -36,6 +36,15 @@ export function validateConfig(config: unknown): ValidationResult {
     }
     if (!p.url || typeof p.url !== 'string') {
       errors.push('Custom provider config must have a "url" string');
+    } else {
+      try {
+        const parsed = new URL(p.url as string);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          errors.push(`Custom provider URL must use http:// or https:// (got "${parsed.protocol}")`);
+        }
+      } catch {
+        errors.push(`Custom provider URL is not a valid URL: "${p.url}"`);
+      }
     }
   } else {
     errors.push('Config "provider" must be a string or custom provider object');

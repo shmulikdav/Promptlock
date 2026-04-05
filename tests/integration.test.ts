@@ -70,6 +70,22 @@ describe('integration: runAll with options', () => {
     expect(parallel.map(r => r.id).sort()).toEqual(sequential.map(r => r.id).sort());
   });
 
+  it('parallel execution handles many configs correctly (no races)', async () => {
+    // Create 20 configs to stress-test the parallel queue
+    const configs = Array.from({ length: 20 }, (_, i) => mockConfig({ id: `prompt-${i}` }));
+    const results = await runAll(configs, { dryRun: true, parallel: true, concurrency: 5 });
+
+    // All 20 must be present with unique IDs
+    expect(results).toHaveLength(20);
+    const ids = results.map(r => r.id).sort();
+    const expected = Array.from({ length: 20 }, (_, i) => `prompt-${i}`).sort();
+    expect(ids).toEqual(expected);
+
+    // No duplicates
+    const unique = new Set(ids);
+    expect(unique.size).toBe(20);
+  });
+
   it('onResult callback fires for each config', async () => {
     const received: string[] = [];
     const configs = [mockConfig({ id: 'p1' }), mockConfig({ id: 'p2' })];

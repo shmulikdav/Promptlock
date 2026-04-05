@@ -6,6 +6,10 @@ import { ensureDir, writeJsonFile } from './utils';
 
 const DEFAULT_SNAPSHOT_DIR = '.promptlock/snapshots';
 
+function sanitizeId(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_\-]/g, '_');
+}
+
 export async function saveSnapshot(
   result: RunResult,
   baseDir: string = DEFAULT_SNAPSHOT_DIR,
@@ -21,7 +25,8 @@ export async function saveSnapshot(
     assertionResults: result.assertions,
   };
 
-  const promptDir = path.join(baseDir, result.id);
+  const safeId = sanitizeId(result.id);
+  const promptDir = path.join(baseDir, safeId);
   await ensureDir(promptDir);
 
   // Save timestamped version for history
@@ -40,14 +45,16 @@ export async function loadSnapshot(
   id: string,
   baseDir: string = DEFAULT_SNAPSHOT_DIR,
 ): Promise<SnapshotData | null> {
+  const safeId = sanitizeId(id);
+
   // Try new format: {id}/latest.json
-  const latestPath = path.join(baseDir, id, 'latest.json');
+  const latestPath = path.join(baseDir, safeId, 'latest.json');
   try {
     const content = await fs.promises.readFile(latestPath, 'utf-8');
     return JSON.parse(content) as SnapshotData;
   } catch {
     // Fall back to old format: {id}.json
-    const legacyPath = path.join(baseDir, `${id}.json`);
+    const legacyPath = path.join(baseDir, `${safeId}.json`);
     try {
       const content = await fs.promises.readFile(legacyPath, 'utf-8');
       return JSON.parse(content) as SnapshotData;
@@ -61,7 +68,8 @@ export async function loadSnapshotHistory(
   id: string,
   baseDir: string = DEFAULT_SNAPSHOT_DIR,
 ): Promise<SnapshotData[]> {
-  const promptDir = path.join(baseDir, id);
+  const safeId = sanitizeId(id);
+  const promptDir = path.join(baseDir, safeId);
   try {
     const files = await fs.promises.readdir(promptDir);
     const snapshots: SnapshotData[] = [];
@@ -89,7 +97,6 @@ export async function listSnapshots(
       if (entry.isDirectory()) {
         ids.push(entry.name);
       } else if (entry.isFile() && entry.name.endsWith('.json')) {
-        // Legacy format
         ids.push(entry.name.replace('.json', ''));
       }
     }

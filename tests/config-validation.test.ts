@@ -126,6 +126,22 @@ describe('validateConfig', () => {
     expect(result.errors[0]).toContain('url');
   });
 
+  it('rejects custom provider with non-http URL', () => {
+    const result = validateConfig(validConfig({
+      provider: { type: 'custom', url: 'ftp://evil.com/api' },
+    }));
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('http');
+  });
+
+  it('rejects custom provider with invalid URL', () => {
+    const result = validateConfig(validConfig({
+      provider: { type: 'custom', url: 'not-a-url' },
+    }));
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('not a valid URL');
+  });
+
   it('validates contains-all assertion', () => {
     const result = validateConfig(validConfig({
       assertions: [{ type: 'contains-all', values: 'not-array' }],

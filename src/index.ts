@@ -1,5 +1,6 @@
-import { PromptLockConfig, RunResult, DiffResult } from './types';
+import { PromptLockConfig, RunResult, DiffResult, SnapshotData } from './types';
 import { runPrompt, runAll, RunOptions } from './runner';
+import { RetryOptions } from './retry';
 import { saveSnapshot, loadSnapshot, loadSnapshotHistory, diffSnapshots } from './snapshot';
 import { printConsoleReport, generateJsonReport, generateHtmlReport } from './reporter';
 
@@ -9,6 +10,9 @@ export interface PromptLockInstanceOptions {
   verbose?: boolean;
   parallel?: boolean;
   concurrency?: number;
+  cache?: boolean;
+  cacheDir?: string;
+  retry?: Partial<RetryOptions>;
 }
 
 export class PromptLock {
@@ -25,6 +29,9 @@ export class PromptLock {
       verbose: options?.verbose,
       parallel: options?.parallel,
       concurrency: options?.concurrency,
+      cache: options?.cache,
+      cacheDir: options?.cacheDir,
+      retry: options?.retry,
     };
   }
 
@@ -58,7 +65,7 @@ export class PromptLock {
     return diffs;
   }
 
-  async history(id: string, snapshotDir?: string) {
+  async history(id: string, snapshotDir?: string): Promise<SnapshotData[]> {
     const dir = snapshotDir ?? this.snapshotDir;
     return loadSnapshotHistory(id, dir);
   }
