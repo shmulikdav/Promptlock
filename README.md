@@ -1,5 +1,9 @@
 # prompt-lock
 
+[![CI](https://github.com/shmulikdav/Promptlock/actions/workflows/ci.yml/badge.svg)](https://github.com/shmulikdav/Promptlock/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/prompt-lock)](https://www.npmjs.com/package/prompt-lock)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Version control and behavioral regression testing for LLM prompts.**
 
 prompt-lock wraps your prompts with behavioral assertions and snapshot baselines. On every change, it runs the assertion suite and flags regressions — like Jest for LLM behavior.
