@@ -29,7 +29,7 @@ export function createOpenAIProvider(apiKey?: string): LLMProvider {
       try {
         const response = await client.chat.completions.create(
           {
-            model: (options as any)?.model ?? 'gpt-4o-mini',
+            model: options?.model ?? 'gpt-4o-mini',
             messages: [{ role: 'user', content: prompt }],
             max_tokens: options?.maxTokens ?? 1024,
             temperature: options?.temperature,

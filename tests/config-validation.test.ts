@@ -110,4 +110,48 @@ describe('validateConfig', () => {
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBeGreaterThan(2);
   });
+
+  it('accepts custom provider config', () => {
+    const result = validateConfig(validConfig({
+      provider: { type: 'custom', url: 'http://localhost:11434/api/generate' },
+    }));
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects custom provider without url', () => {
+    const result = validateConfig(validConfig({
+      provider: { type: 'custom' },
+    }));
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('url');
+  });
+
+  it('validates contains-all assertion', () => {
+    const result = validateConfig(validConfig({
+      assertions: [{ type: 'contains-all', values: 'not-array' }],
+    }));
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('values');
+  });
+
+  it('validates max-latency assertion', () => {
+    const result = validateConfig(validConfig({
+      assertions: [{ type: 'max-latency', ms: -1 }],
+    }));
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('ms');
+  });
+
+  it('validates dataset field', () => {
+    const result = validateConfig(validConfig({ dataset: 'not-array' }));
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('dataset');
+  });
+
+  it('accepts valid dataset', () => {
+    const result = validateConfig(validConfig({
+      dataset: [{ text: 'input 1' }, { text: 'input 2' }],
+    }));
+    expect(result.valid).toBe(true);
+  });
 });

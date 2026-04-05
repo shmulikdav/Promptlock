@@ -1,31 +1,40 @@
 import { PromptLockConfig, RunResult, DiffResult } from './types';
-import { runPrompt, runAll } from './runner';
-import { saveSnapshot, loadSnapshot, diffSnapshots } from './snapshot';
+import { runPrompt, runAll, RunOptions } from './runner';
+import { saveSnapshot, loadSnapshot, loadSnapshotHistory, diffSnapshots } from './snapshot';
 import { printConsoleReport, generateJsonReport, generateHtmlReport } from './reporter';
 
-export interface PromptLockOptions {
+export interface PromptLockInstanceOptions {
   snapshotDir?: string;
   reportDir?: string;
+  verbose?: boolean;
+  parallel?: boolean;
+  concurrency?: number;
 }
 
 export class PromptLock {
   private configs: PromptLockConfig[];
   private snapshotDir: string;
   private reportDir: string;
+  private runOpts: RunOptions;
 
-  constructor(config: PromptLockConfig | PromptLockConfig[], options?: PromptLockOptions) {
+  constructor(config: PromptLockConfig | PromptLockConfig[], options?: PromptLockInstanceOptions) {
     this.configs = Array.isArray(config) ? config : [config];
     this.snapshotDir = options?.snapshotDir ?? '.promptlock/snapshots';
     this.reportDir = options?.reportDir ?? '.promptlock/reports';
+    this.runOpts = {
+      verbose: options?.verbose,
+      parallel: options?.parallel,
+      concurrency: options?.concurrency,
+    };
   }
 
-  async run(): Promise<RunResult[]> {
-    return runAll(this.configs);
+  async run(opts?: RunOptions): Promise<RunResult[]> {
+    return runAll(this.configs, { ...this.runOpts, ...opts });
   }
 
-  async snapshot(snapshotDir?: string): Promise<string[]> {
+  async snapshot(snapshotDir?: string, opts?: RunOptions): Promise<string[]> {
     const dir = snapshotDir ?? this.snapshotDir;
-    const results = await this.run();
+    const results = await this.run(opts);
     const paths: string[] = [];
     for (const result of results) {
       const p = await saveSnapshot(result, dir);
@@ -34,9 +43,9 @@ export class PromptLock {
     return paths;
   }
 
-  async diff(snapshotDir?: string): Promise<DiffResult[]> {
+  async diff(snapshotDir?: string, opts?: RunOptions): Promise<DiffResult[]> {
     const dir = snapshotDir ?? this.snapshotDir;
-    const results = await this.run();
+    const results = await this.run(opts);
     const diffs: DiffResult[] = [];
 
     for (const result of results) {
@@ -47,6 +56,11 @@ export class PromptLock {
     }
 
     return diffs;
+  }
+
+  async history(id: string, snapshotDir?: string) {
+    const dir = snapshotDir ?? this.snapshotDir;
+    return loadSnapshotHistory(id, dir);
   }
 
   async report(format: 'json' | 'html' | 'console' = 'console', reportDir?: string): Promise<void> {
@@ -73,9 +87,11 @@ export class PromptLock {
 
 // Re-export everything
 export { runPrompt, runAll } from './runner';
-export { saveSnapshot, loadSnapshot, listSnapshots, diffSnapshots } from './snapshot';
+export type { RunOptions } from './runner';
+export { saveSnapshot, loadSnapshot, loadSnapshotHistory, listSnapshots, diffSnapshots } from './snapshot';
 export { runAssertions } from './assertions';
 export { getProvider } from './providers';
+export { createCustomProvider } from './providers/custom';
 export {
   printConsoleReport,
   printDiffReport,

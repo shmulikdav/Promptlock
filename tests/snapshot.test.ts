@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { saveSnapshot, loadSnapshot, listSnapshots, diffSnapshots } from '../src/snapshot';
+import { saveSnapshot, loadSnapshot, listSnapshots, loadSnapshotHistory, diffSnapshots } from '../src/snapshot';
 import { RunResult, SnapshotData } from '../src/types';
 
 const TEST_SNAPSHOT_DIR = path.join(__dirname, '.test-snapshots');
@@ -33,16 +33,21 @@ afterAll(async () => {
 });
 
 describe('saveSnapshot', () => {
-  it('saves a snapshot file', async () => {
+  it('saves a snapshot file with history', async () => {
     const result = makeRunResult();
     const filePath = await saveSnapshot(result, TEST_SNAPSHOT_DIR);
 
-    expect(filePath).toContain('test-prompt.json');
+    expect(filePath).toContain('latest.json');
     expect(fs.existsSync(filePath)).toBe(true);
 
     const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     expect(content.id).toBe('test-prompt');
     expect(content.output).toBe('test output');
+
+    // Should also have a timestamped file
+    const promptDir = path.join(TEST_SNAPSHOT_DIR, 'test-prompt');
+    const files = fs.readdirSync(promptDir);
+    expect(files.length).toBeGreaterThanOrEqual(2); // latest.json + timestamp.json
   });
 });
 
@@ -77,6 +82,23 @@ describe('listSnapshots', () => {
   it('returns empty array for nonexistent directory', async () => {
     const ids = await listSnapshots('/tmp/nonexistent-dir-12345');
     expect(ids).toEqual([]);
+  });
+});
+
+describe('loadSnapshotHistory', () => {
+  it('returns history of snapshots in chronological order', async () => {
+    await saveSnapshot(makeRunResult({ id: 'prompt-x', output: 'v1' }), TEST_SNAPSHOT_DIR);
+    // Small delay to get different timestamps
+    await new Promise(r => setTimeout(r, 10));
+    await saveSnapshot(makeRunResult({ id: 'prompt-x', output: 'v2' }), TEST_SNAPSHOT_DIR);
+
+    const history = await loadSnapshotHistory('prompt-x', TEST_SNAPSHOT_DIR);
+    expect(history.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('returns empty for nonexistent prompt', async () => {
+    const history = await loadSnapshotHistory('nonexistent', TEST_SNAPSHOT_DIR);
+    expect(history).toEqual([]);
   });
 });
 

@@ -124,6 +124,49 @@ export const builtinAssertions: Record<string, AssertionHandler> = {
     };
   },
 
+  'contains-all': (output, config) => {
+    const values = config.values as string[];
+    const missing = values.filter(v => !output.includes(v));
+    return {
+      type: 'contains-all',
+      name: `contains-all [${values.length} items]`,
+      passed: missing.length === 0,
+      expected: `output to contain all of: ${values.join(', ')}`,
+      actual: missing.length > 0 ? `missing: ${missing.join(', ')}` : 'all found',
+    };
+  },
+
+  'no-duplicates': (output, config) => {
+    const separator = (config.separator as string | undefined) ?? '\n';
+    const items = output.split(separator).map(s => s.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const duplicates: string[] = [];
+    for (const item of items) {
+      if (seen.has(item)) duplicates.push(item);
+      seen.add(item);
+    }
+    return {
+      type: 'no-duplicates',
+      name: 'no-duplicates',
+      passed: duplicates.length === 0,
+      expected: 'no duplicate items',
+      actual: duplicates.length > 0 ? `duplicates: ${duplicates.join(', ')}` : 'no duplicates',
+    };
+  },
+
+  'max-latency': (output, config) => {
+    // This is evaluated by the runner which injects __duration into config
+    const ms = config.ms as number;
+    const actual = (config.__duration as number) ?? 0;
+    return {
+      type: 'max-latency',
+      name: `max-latency ${ms}ms`,
+      passed: actual <= ms,
+      expected: `<= ${ms}ms`,
+      actual: `${actual}ms`,
+    };
+  },
+
   'no-hallucination-words': (output, config) => {
     const words = (config.words as string[] | undefined) ?? DEFAULT_HALLUCINATION_WORDS;
     const found = words.filter(w => output.includes(w));

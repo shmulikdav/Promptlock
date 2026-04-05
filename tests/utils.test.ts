@@ -38,6 +38,16 @@ describe('renderTemplate', () => {
     const result = renderTemplate('Hello {{name}}!', { name: '' });
     expect(result).toBe('Hello !');
   });
+
+  it('supports dashes in variable names', () => {
+    const result = renderTemplate('Hello {{user-name}}!', { 'user-name': 'Alice' });
+    expect(result).toBe('Hello Alice!');
+  });
+
+  it('supports dots in variable names', () => {
+    const result = renderTemplate('Version {{api.version}}', { 'api.version': '2.0' });
+    expect(result).toBe('Version 2.0');
+  });
 });
 
 describe('hashString', () => {

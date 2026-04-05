@@ -6,15 +6,15 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { PromptLockConfig, PromptLockProjectConfig } from './types';
 import { validateConfig } from './config-validation';
-import { runAll } from './runner';
-import { saveSnapshot, loadSnapshot, diffSnapshots } from './snapshot';
+import { runAll, RunOptions } from './runner';
+import { saveSnapshot, loadSnapshot, loadSnapshotHistory, diffSnapshots } from './snapshot';
 import {
   printConsoleReport,
   printDiffReport,
   generateJsonReport,
   generateHtmlReport,
 } from './reporter';
-import { ensureDir, writeJsonFile } from './utils';
+import { ensureDir, writeJsonFile, spinner } from './utils';
 
 const program = new Command();
 
@@ -60,12 +60,13 @@ program
     if (!fs.existsSync(examplePath)) {
       const exampleContent = `// Example prompt-lock definition
 // Modify this file or create new ones in this directory
+// You can export a single config or an array of configs
 
 /** @type {import('prompt-lock').PromptLockConfig} */
 module.exports = {
   id: 'example-summarizer',
   version: '1.0.0',
-  provider: 'anthropic',
+  provider: 'anthropic',   // 'openai', 'anthropic', or { type: 'custom', url: 'http://localhost:11434/api/generate' }
   model: 'claude-sonnet-4-20250514',
 
   prompt: \`You are a professional summarizer.
@@ -76,10 +77,17 @@ Text: {{text}}\`,
     text: 'The quick brown fox jumped over the lazy dog. This happened near a river on a sunny afternoon.',
   },
 
+  // Optional: test with multiple inputs
+  // dataset: [
+  //   { text: 'Input one...' },
+  //   { text: 'Input two...' },
+  // ],
+
   assertions: [
     { type: 'max-length', chars: 500 },
     { type: 'not-contains', value: 'I cannot' },
     { type: 'min-length', chars: 10 },
+    { type: 'max-latency', ms: 10000 },
   ],
 };
 `;
@@ -107,7 +115,16 @@ Text: {{text}}\`,
 
     console.log('');
     console.log(chalk.bold('prompt-lock initialized!'));
-    console.log(chalk.dim('Edit prompts/ files, then run: prompt-lock run'));
+    console.log('');
+    console.log('  Created:');
+    console.log(`    ${chalk.dim('.promptlock/')}        — config, snapshots, reports`);
+    console.log(`    ${chalk.dim('prompts/example.js')} — example prompt definition`);
+    console.log('');
+    console.log('  Next steps:');
+    console.log(`    1. Edit ${chalk.bold('prompts/example.js')} with your prompt and assertions`);
+    console.log(`    2. Set your API key: ${chalk.bold('export ANTHROPIC_API_KEY=...')}`);
+    console.log(`    3. Run: ${chalk.bold('prompt-lock run')}`);
+    console.log(`    4. Save baseline: ${chalk.bold('prompt-lock snapshot')}`);
   });
 
 // ── run ───────────────────────────────────────────────────────────────────────
@@ -117,8 +134,12 @@ program
   .description('Run assertions against all registered prompts')
   .option('--id <id>', 'Run only a specific prompt by ID')
   .option('--ci', 'CI mode: exit 1 on any failure')
-  .option('--report <format>', 'Generate report: json, html, or both', '')
+  .option('--report <format>', 'Generate report: json, html, or both')
   .option('--config <path>', 'Path to config file')
+  .option('--dry-run', 'Validate configs and show what would be tested without calling LLMs')
+  .option('--verbose', 'Show detailed output for each prompt run')
+  .option('--parallel', 'Run prompts in parallel')
+  .option('--concurrency <n>', 'Max concurrent runs (default: 5)', parseInt)
   .action(async (opts) => {
     const configs = await loadPromptConfigs(opts.config, opts.id);
 
@@ -129,10 +150,28 @@ program
       return;
     }
 
-    console.log(chalk.dim(`Running ${configs.length} prompt${configs.length !== 1 ? 's' : ''}...`));
-    console.log('');
+    if (opts.dryRun) {
+      console.log(chalk.dim(`[dry-run] Would test ${configs.length} prompt${configs.length !== 1 ? 's' : ''}:`));
+      for (const c of configs) {
+        const dsCount = c.dataset?.length ?? 0;
+        const prov = typeof c.provider === 'string' ? c.provider : `custom:${c.provider.url}`;
+        console.log(`  ${chalk.bold(c.id)} — ${prov}/${c.model} — ${c.assertions.length} assertions${dsCount > 0 ? ` — ${dsCount} dataset inputs` : ''}`);
+      }
+      console.log('');
+      console.log(chalk.dim('No LLM calls were made. Remove --dry-run to execute.'));
+      return;
+    }
 
-    const results = await runAll(configs);
+    const runOpts: RunOptions = {
+      verbose: opts.verbose,
+      parallel: opts.parallel,
+      concurrency: opts.concurrency,
+    };
+
+    const spin = spinner(`Running ${configs.length} prompt${configs.length !== 1 ? 's' : ''}...`);
+    const results = await runAll(configs, runOpts);
+    spin.stop(`Ran ${configs.length} prompt${configs.length !== 1 ? 's' : ''}.`);
+
     printConsoleReport(results);
 
     const projectConfig = loadProjectConfig(opts.config);
@@ -166,6 +205,7 @@ program
   .description('Capture and save output baseline for prompts')
   .option('--id <id>', 'Snapshot only a specific prompt by ID')
   .option('--config <path>', 'Path to config file')
+  .option('--verbose', 'Show detailed output')
   .action(async (opts) => {
     const configs = await loadPromptConfigs(opts.config, opts.id);
 
@@ -178,9 +218,9 @@ program
     const projectConfig = loadProjectConfig(opts.config);
     const snapshotDir = projectConfig?.snapshotDir ?? '.promptlock/snapshots';
 
-    console.log(chalk.dim(`Running ${configs.length} prompt${configs.length !== 1 ? 's' : ''} for snapshot...`));
-
-    const results = await runAll(configs);
+    const spin = spinner(`Running ${configs.length} prompt${configs.length !== 1 ? 's' : ''} for snapshot...`);
+    const results = await runAll(configs, { verbose: opts.verbose });
+    spin.stop('Done.');
 
     for (const result of results) {
       const p = await saveSnapshot(result, snapshotDir);
@@ -199,6 +239,7 @@ program
   .description('Compare current output against saved snapshots')
   .option('--id <id>', 'Diff only a specific prompt by ID')
   .option('--config <path>', 'Path to config file')
+  .option('--verbose', 'Show detailed output')
   .action(async (opts) => {
     const configs = await loadPromptConfigs(opts.config, opts.id);
 
@@ -211,9 +252,10 @@ program
     const projectConfig = loadProjectConfig(opts.config);
     const snapshotDir = projectConfig?.snapshotDir ?? '.promptlock/snapshots';
 
-    console.log(chalk.dim(`Running ${configs.length} prompt${configs.length !== 1 ? 's' : ''} for diff...`));
+    const spin = spinner(`Running ${configs.length} prompt${configs.length !== 1 ? 's' : ''} for diff...`);
+    const results = await runAll(configs, { verbose: opts.verbose });
+    spin.stop('Done.');
 
-    const results = await runAll(configs);
     const diffs = [];
 
     for (const result of results) {
@@ -229,6 +271,35 @@ program
       printDiffReport(diffs);
     } else {
       console.log(chalk.yellow('No diffs to show. Run "prompt-lock snapshot" to create baselines.'));
+    }
+  });
+
+// ── history ───────────────────────────────────────────────────────────────────
+
+program
+  .command('history')
+  .description('Show snapshot history for a prompt')
+  .argument('<id>', 'Prompt ID')
+  .option('--config <path>', 'Path to config file')
+  .action(async (id, opts) => {
+    const projectConfig = loadProjectConfig(opts.config);
+    const snapshotDir = projectConfig?.snapshotDir ?? '.promptlock/snapshots';
+
+    const history = await loadSnapshotHistory(id, snapshotDir);
+    if (history.length === 0) {
+      console.log(chalk.yellow(`No snapshot history for "${id}".`));
+      return;
+    }
+
+    console.log(chalk.bold(`Snapshot history for "${id}" (${history.length} entries):`));
+    console.log('');
+    for (const snap of history) {
+      const passCount = snap.assertionResults.filter(a => a.passed).length;
+      const total = snap.assertionResults.length;
+      const icon = passCount === total ? '✅' : '❌';
+      console.log(
+        `  ${icon} ${chalk.dim(snap.capturedAt)}  v${snap.version ?? '?'}  ${snap.model}  ${passCount}/${total} passed`,
+      );
     }
   });
 
@@ -286,7 +357,7 @@ async function loadPromptConfigs(configPath?: string, filterId?: string): Promis
 }
 
 function parseReportFormats(
-  cliFormat: string,
+  cliFormat: string | undefined,
   projectConfig: PromptLockProjectConfig | null,
 ): string[] {
   if (cliFormat) {

@@ -29,7 +29,7 @@ export function createAnthropicProvider(apiKey?: string): LLMProvider {
       try {
         const response = await client.messages.create(
           {
-            model: (options as any)?.model ?? 'claude-sonnet-4-20250514',
+            model: options?.model ?? 'claude-sonnet-4-20250514',
             max_tokens: options?.maxTokens ?? 1024,
             temperature: options?.temperature,
             messages: [{ role: 'user', content: prompt }],

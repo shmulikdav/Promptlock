@@ -73,4 +73,16 @@ describe('getProvider', () => {
     const provider = getProvider('anthropic', 'claude-sonnet-4-20250514');
     await expect(provider.call('test')).rejects.toThrow('Anthropic SDK not found');
   });
+
+  it('creates a custom provider', () => {
+    const provider = getProvider(
+      { type: 'custom', url: 'http://localhost:11434/api/generate' },
+      'llama3',
+    );
+    expect(typeof provider.call).toBe('function');
+  });
+
+  it('throws for invalid provider config', () => {
+    expect(() => getProvider({} as any, 'model')).toThrow('Invalid provider');
+  });
 });

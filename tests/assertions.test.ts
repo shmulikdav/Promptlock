@@ -138,6 +138,50 @@ describe('builtin assertions', () => {
       expect(result.actual).toContain('maybe');
     });
   });
+
+  describe('contains-all', () => {
+    it('passes when all values are present', () => {
+      const result = builtinAssertions['contains-all']('hello world foo', { values: ['hello', 'world'] });
+      expect(result.passed).toBe(true);
+    });
+
+    it('fails when some values are missing', () => {
+      const result = builtinAssertions['contains-all']('hello world', { values: ['hello', 'missing'] });
+      expect(result.passed).toBe(false);
+      expect(result.actual).toContain('missing');
+    });
+  });
+
+  describe('no-duplicates', () => {
+    it('passes when no duplicates', () => {
+      const result = builtinAssertions['no-duplicates']('apple\nbanana\ncherry', {});
+      expect(result.passed).toBe(true);
+    });
+
+    it('fails when duplicates found', () => {
+      const result = builtinAssertions['no-duplicates']('apple\nbanana\napple', {});
+      expect(result.passed).toBe(false);
+      expect(result.actual).toContain('apple');
+    });
+
+    it('uses custom separator', () => {
+      const result = builtinAssertions['no-duplicates']('a, b, a', { separator: ', ' });
+      expect(result.passed).toBe(false);
+    });
+  });
+
+  describe('max-latency', () => {
+    it('passes when under the limit', () => {
+      const result = builtinAssertions['max-latency']('output', { ms: 5000, __duration: 1000 });
+      expect(result.passed).toBe(true);
+    });
+
+    it('fails when over the limit', () => {
+      const result = builtinAssertions['max-latency']('output', { ms: 1000, __duration: 2000 });
+      expect(result.passed).toBe(false);
+      expect(result.actual).toBe('2000ms');
+    });
+  });
 });
 
 describe('json-schema assertion', () => {

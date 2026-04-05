@@ -1,10 +1,28 @@
+// ── Provider Config ──────────────────────────────────────────────────────────
+
+export type ProviderConfig =
+  | 'openai'
+  | 'anthropic'
+  | CustomProviderConfig;
+
+export interface CustomProviderConfig {
+  type: 'custom';
+  url: string;
+  headers?: Record<string, string>;
+  bodyTemplate?: Record<string, unknown>;
+  responsePath?: string;
+}
+
+// ── Prompt Config ────────────────────────────────────────────────────────────
+
 export interface PromptLockConfig {
   id: string;
   version?: string;
-  provider: 'openai' | 'anthropic';
+  provider: ProviderConfig;
   model: string;
   prompt: string;
   defaultVars?: Record<string, string>;
+  dataset?: Record<string, string>[];
   assertions: AssertionConfig[];
   options?: PromptLockOptions;
 }
@@ -13,11 +31,16 @@ export interface PromptLockOptions {
   temperature?: number;
   maxTokens?: number;
   timeout?: number;
+  parallel?: boolean;
+  concurrency?: number;
 }
+
+// ── Assertions ─────────���─────────────────────────────��───────────────────────
 
 export type AssertionConfig =
   | { type: 'contains'; value: string }
   | { type: 'not-contains'; value: string }
+  | { type: 'contains-all'; values: string[] }
   | { type: 'starts-with'; value: string }
   | { type: 'ends-with'; value: string }
   | { type: 'matches-regex'; pattern: string }
@@ -26,6 +49,8 @@ export type AssertionConfig =
   | { type: 'json-valid' }
   | { type: 'json-schema'; schema: Record<string, unknown> }
   | { type: 'no-hallucination-words'; words?: string[] }
+  | { type: 'no-duplicates'; separator?: string }
+  | { type: 'max-latency'; ms: number }
   | { type: 'custom'; name: string; fn: (output: string) => boolean | Promise<boolean> };
 
 export interface AssertionResult {
@@ -36,6 +61,8 @@ export interface AssertionResult {
   actual?: string;
   message?: string;
 }
+
+// ── Run Result ───────────────────────────────────��───────────────────────────
 
 export interface RunResult {
   id: string;
@@ -50,7 +77,18 @@ export interface RunResult {
   passed: boolean;
   duration: number;
   timestamp: string;
+  datasetResults?: DatasetRunResult[];
 }
+
+export interface DatasetRunResult {
+  vars: Record<string, string>;
+  output: string;
+  assertions: AssertionResult[];
+  passed: boolean;
+  duration: number;
+}
+
+// ── Snapshot ─────────────────────────────────────────────────────────────────
 
 export interface SnapshotData {
   id: string;
@@ -62,6 +100,8 @@ export interface SnapshotData {
   output: string;
   assertionResults: AssertionResult[];
 }
+
+// ── Diff ──���───────────────────────────────��──────────────────────────────────
 
 export interface DiffResult {
   id: string;
@@ -77,11 +117,13 @@ export interface DiffChange {
   value: string;
 }
 
+// ── Project Config ───────────��───────────────────────────────────────────────
+
 export interface PromptLockProjectConfig {
   promptsDir: string;
   snapshotDir: string;
   reportDir: string;
-  defaultProvider: 'openai' | 'anthropic';
+  defaultProvider: string;
   defaultModel?: string;
   ci: {
     failOnRegression: boolean;
@@ -89,6 +131,8 @@ export interface PromptLockProjectConfig {
   };
 }
 
+// ── Provider Interface ───────────��─────────────────────────��─────────────────
+
 export interface LLMProvider {
-  call(prompt: string, options?: PromptLockOptions): Promise<string>;
+  call(prompt: string, options?: PromptLockOptions & { model?: string }): Promise<string>;
 }

@@ -23,7 +23,7 @@ This runs 4 simulated prompts (2 passing, 2 failing), saves snapshots, shows dif
 npm install prompt-lock
 ```
 
-You'll also need at least one LLM provider SDK:
+You'll also need at least one LLM provider SDK (or use a custom endpoint):
 
 ```bash
 # For Anthropic
@@ -31,6 +31,9 @@ npm install @anthropic-ai/sdk
 
 # For OpenAI
 npm install openai
+
+# For Ollama, LM Studio, Azure, etc. — no extra install needed!
+# Use the custom provider: { type: 'custom', url: 'http://localhost:11434/api/generate' }
 ```
 
 ## Quick Start
@@ -46,11 +49,14 @@ export ANTHROPIC_API_KEY=your-key-here
 
 # 4. Run assertions
 npx prompt-lock run
+
+# 5. Save a snapshot baseline
+npx prompt-lock snapshot
 ```
 
 ## Defining Prompts
 
-Create `.js` files in your `prompts/` directory:
+Create `.js` files in your `prompts/` directory. You can export a single config or an array of configs:
 
 ```javascript
 // prompts/summarizer.js
@@ -72,7 +78,53 @@ Article: {{article}}`,
     { type: 'contains', value: '•' },
     { type: 'max-length', chars: 500 },
     { type: 'not-contains', value: 'I cannot' },
+    { type: 'max-latency', ms: 10000 },
   ]
+};
+```
+
+### Using Custom Providers (Ollama, LM Studio, Azure, etc.)
+
+```javascript
+module.exports = {
+  id: 'local-test',
+  provider: {
+    type: 'custom',
+    url: 'http://localhost:11434/api/generate',
+    // Optional: custom headers for auth
+    headers: { 'Authorization': 'Bearer ...' },
+    // Optional: custom response path (auto-detects OpenAI, Anthropic, Ollama formats)
+    responsePath: 'response',
+  },
+  model: 'llama3',
+  prompt: 'Hello {{name}}',
+  defaultVars: { name: 'world' },
+  assertions: [
+    { type: 'min-length', chars: 5 },
+  ],
+};
+```
+
+### Testing with Datasets
+
+Test a prompt against multiple inputs:
+
+```javascript
+module.exports = {
+  id: 'classifier',
+  provider: 'openai',
+  model: 'gpt-4o-mini',
+  prompt: 'Classify this ticket: {{ticket}}',
+  defaultVars: { ticket: 'My payment failed' },
+  dataset: [
+    { ticket: 'My payment failed' },
+    { ticket: 'How do I reset my password?' },
+    { ticket: 'Your product is great!' },
+  ],
+  assertions: [
+    { type: 'json-valid' },
+    { type: 'max-latency', ms: 5000 },
+  ],
 };
 ```
 
@@ -115,11 +167,15 @@ prompt-lock run --ci               # Exit code 1 on failure
 prompt-lock run --report html      # Generate HTML report
 prompt-lock run --report json      # Generate JSON report
 prompt-lock run --report both      # Generate both reports
+prompt-lock run --dry-run          # Show what would be tested without calling LLMs
+prompt-lock run --verbose          # Show detailed output per prompt
+prompt-lock run --parallel         # Run prompts in parallel
+prompt-lock run --concurrency 10   # Max concurrent runs (default: 5)
 ```
 
 ### `prompt-lock snapshot`
 
-Capture and save the current output as a baseline.
+Capture and save the current output as a baseline. Snapshots are versioned — previous snapshots are kept as history.
 
 ```bash
 prompt-lock snapshot               # Snapshot all prompts
@@ -135,12 +191,21 @@ prompt-lock diff                   # Diff all prompts
 prompt-lock diff --id my-prompt
 ```
 
+### `prompt-lock history`
+
+View snapshot history for a prompt.
+
+```bash
+prompt-lock history my-prompt
+```
+
 ## Assertion Reference
 
 | Assertion | Config | What it checks |
 |-----------|--------|---------------|
 | `contains` | `value: string` | Output contains the string |
 | `not-contains` | `value: string` | Output does NOT contain the string |
+| `contains-all` | `values: string[]` | Output contains ALL listed strings |
 | `starts-with` | `value: string` | Output starts with the string |
 | `ends-with` | `value: string` | Output ends with the string |
 | `matches-regex` | `pattern: string` | Output matches regex pattern |
@@ -149,6 +214,8 @@ prompt-lock diff --id my-prompt
 | `json-valid` | — | Output is valid JSON |
 | `json-schema` | `schema: object` | Output JSON matches a JSON Schema |
 | `no-hallucination-words` | `words?: string[]` | Output does NOT contain hallucination indicators |
+| `no-duplicates` | `separator?: string` | Output has no duplicate items (split by separator, default `\n`) |
+| `max-latency` | `ms: number` | LLM response time is under N milliseconds |
 | `custom` | `name: string, fn: (output) => boolean` | User-provided function returning boolean |
 
 ## Provider Setup
@@ -164,6 +231,23 @@ export ANTHROPIC_API_KEY=your-key-here
 ```bash
 export OPENAI_API_KEY=your-key-here
 ```
+
+### Custom Provider (Ollama, LM Studio, Azure, any HTTP endpoint)
+
+No API key needed for local models. Just set the URL:
+
+```javascript
+provider: {
+  type: 'custom',
+  url: 'http://localhost:11434/api/generate',  // Ollama
+  // url: 'http://localhost:1234/v1/chat/completions',  // LM Studio
+  // url: 'https://your-resource.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2024-02-01',  // Azure
+  headers: { 'api-key': process.env.AZURE_API_KEY },  // Optional auth
+  responsePath: 'choices[0].message.content',  // Optional: path to extract response
+}
+```
+
+Auto-detects response format for OpenAI, Anthropic, and Ollama APIs. Use `responsePath` for custom APIs.
 
 ## CI/CD Integration
 
@@ -203,6 +287,17 @@ The `--ci` flag (or `failOnRegression: true` in config) ensures exit code 1 when
     "reportFormat": ["json", "html"]
   }
 }
+```
+
+## Template Variables
+
+Use `{{variableName}}` in your prompts. Supports alphanumeric, dashes, dots, and underscores:
+
+```
+{{article}}        ✅
+{{user-name}}      ✅
+{{api.version}}    ✅
+{{my_var}}         ✅
 ```
 
 ## License

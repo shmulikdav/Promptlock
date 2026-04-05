@@ -1,10 +1,9 @@
-import { PromptLockConfig } from './types';
-
 const VALID_PROVIDERS = ['openai', 'anthropic'];
 const VALID_ASSERTION_TYPES = [
-  'contains', 'not-contains', 'starts-with', 'ends-with',
+  'contains', 'not-contains', 'contains-all', 'starts-with', 'ends-with',
   'matches-regex', 'max-length', 'min-length',
-  'json-valid', 'json-schema', 'no-hallucination-words', 'custom',
+  'json-valid', 'json-schema', 'no-hallucination-words',
+  'no-duplicates', 'max-latency', 'custom',
 ];
 
 export interface ValidationResult {
@@ -25,8 +24,21 @@ export function validateConfig(config: unknown): ValidationResult {
     errors.push('Config "id" must be a non-empty string');
   }
 
-  if (!c.provider || typeof c.provider !== 'string' || !VALID_PROVIDERS.includes(c.provider)) {
-    errors.push(`Config "provider" must be one of: ${VALID_PROVIDERS.join(', ')}`);
+  // Provider: string ('openai'|'anthropic') or object with type: 'custom'
+  if (typeof c.provider === 'string') {
+    if (!VALID_PROVIDERS.includes(c.provider)) {
+      errors.push(`Config "provider" must be one of: ${VALID_PROVIDERS.join(', ')}, or { type: 'custom', url: '...' }`);
+    }
+  } else if (typeof c.provider === 'object' && c.provider !== null) {
+    const p = c.provider as Record<string, unknown>;
+    if (p.type !== 'custom') {
+      errors.push('Custom provider config must have type: "custom"');
+    }
+    if (!p.url || typeof p.url !== 'string') {
+      errors.push('Custom provider config must have a "url" string');
+    }
+  } else {
+    errors.push('Config "provider" must be a string or custom provider object');
   }
 
   if (!c.model || typeof c.model !== 'string') {
@@ -52,12 +64,17 @@ export function validateConfig(config: unknown): ValidationResult {
         continue;
       }
 
-      // Type-specific validation
       const type = a.type as string;
 
       if (['contains', 'not-contains', 'starts-with', 'ends-with'].includes(type)) {
         if (typeof a.value !== 'string') {
           errors.push(`Assertion [${i}] "${type}" requires "value" to be a string`);
+        }
+      }
+
+      if (type === 'contains-all') {
+        if (!Array.isArray(a.values) || !a.values.every((v: unknown) => typeof v === 'string')) {
+          errors.push(`Assertion [${i}] "contains-all" requires "values" to be a string array`);
         }
       }
 
@@ -79,6 +96,12 @@ export function validateConfig(config: unknown): ValidationResult {
         }
       }
 
+      if (type === 'max-latency') {
+        if (typeof a.ms !== 'number' || a.ms < 0) {
+          errors.push(`Assertion [${i}] "max-latency" requires "ms" to be a non-negative number`);
+        }
+      }
+
       if (type === 'json-schema') {
         if (!a.schema || typeof a.schema !== 'object') {
           errors.push(`Assertion [${i}] "json-schema" requires "schema" to be an object`);
@@ -91,6 +114,19 @@ export function validateConfig(config: unknown): ValidationResult {
         }
         if (!a.name || typeof a.name !== 'string') {
           errors.push(`Assertion [${i}] "custom" requires "name" to be a non-empty string`);
+        }
+      }
+    }
+  }
+
+  // Validate dataset if present
+  if (c.dataset !== undefined) {
+    if (!Array.isArray(c.dataset)) {
+      errors.push('Config "dataset" must be an array of variable objects');
+    } else {
+      for (let i = 0; i < c.dataset.length; i++) {
+        if (typeof c.dataset[i] !== 'object' || c.dataset[i] === null) {
+          errors.push(`Dataset [${i}] must be an object`);
         }
       }
     }

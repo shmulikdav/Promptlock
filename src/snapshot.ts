@@ -21,21 +21,61 @@ export async function saveSnapshot(
     assertionResults: result.assertions,
   };
 
-  const filePath = path.join(baseDir, `${result.id}.json`);
-  await writeJsonFile(filePath, snapshot);
-  return filePath;
+  const promptDir = path.join(baseDir, result.id);
+  await ensureDir(promptDir);
+
+  // Save timestamped version for history
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const historyPath = path.join(promptDir, `${ts}.json`);
+  await writeJsonFile(historyPath, snapshot);
+
+  // Also save as "latest.json" for easy access
+  const latestPath = path.join(promptDir, 'latest.json');
+  await writeJsonFile(latestPath, snapshot);
+
+  return latestPath;
 }
 
 export async function loadSnapshot(
   id: string,
   baseDir: string = DEFAULT_SNAPSHOT_DIR,
 ): Promise<SnapshotData | null> {
-  const filePath = path.join(baseDir, `${id}.json`);
+  // Try new format: {id}/latest.json
+  const latestPath = path.join(baseDir, id, 'latest.json');
   try {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
+    const content = await fs.promises.readFile(latestPath, 'utf-8');
     return JSON.parse(content) as SnapshotData;
   } catch {
-    return null;
+    // Fall back to old format: {id}.json
+    const legacyPath = path.join(baseDir, `${id}.json`);
+    try {
+      const content = await fs.promises.readFile(legacyPath, 'utf-8');
+      return JSON.parse(content) as SnapshotData;
+    } catch {
+      return null;
+    }
+  }
+}
+
+export async function loadSnapshotHistory(
+  id: string,
+  baseDir: string = DEFAULT_SNAPSHOT_DIR,
+): Promise<SnapshotData[]> {
+  const promptDir = path.join(baseDir, id);
+  try {
+    const files = await fs.promises.readdir(promptDir);
+    const snapshots: SnapshotData[] = [];
+    for (const file of files.filter(f => f.endsWith('.json') && f !== 'latest.json').sort()) {
+      try {
+        const content = await fs.promises.readFile(path.join(promptDir, file), 'utf-8');
+        snapshots.push(JSON.parse(content) as SnapshotData);
+      } catch {
+        // skip corrupt files
+      }
+    }
+    return snapshots;
+  } catch {
+    return [];
   }
 }
 
@@ -43,10 +83,17 @@ export async function listSnapshots(
   baseDir: string = DEFAULT_SNAPSHOT_DIR,
 ): Promise<string[]> {
   try {
-    const files = await fs.promises.readdir(baseDir);
-    return files
-      .filter(f => f.endsWith('.json'))
-      .map(f => f.replace('.json', ''));
+    const entries = await fs.promises.readdir(baseDir, { withFileTypes: true });
+    const ids: string[] = [];
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        ids.push(entry.name);
+      } else if (entry.isFile() && entry.name.endsWith('.json')) {
+        // Legacy format
+        ids.push(entry.name.replace('.json', ''));
+      }
+    }
+    return ids;
   } catch {
     return [];
   }

@@ -35,6 +35,27 @@ export function printConsoleReport(results: RunResult[]): void {
         (assertion.message ? chalk.dim(` — ${assertion.message}`) : ''),
       );
     }
+
+    // Show dataset results if present
+    if (result.datasetResults && result.datasetResults.length > 0) {
+      const dsPassed = result.datasetResults.filter(d => d.passed).length;
+      const dsTotal = result.datasetResults.length;
+      const dsIcon = dsPassed === dsTotal ? chalk.green('✅') : chalk.red('❌');
+      console.log(
+        `   ${dsIcon} dataset: ${dsPassed}/${dsTotal} inputs passed`,
+      );
+      for (let i = 0; i < result.datasetResults.length; i++) {
+        const ds = result.datasetResults[i];
+        if (!ds.passed) {
+          const dsFailed = ds.assertions.filter(a => !a.passed);
+          const varsStr = Object.entries(ds.vars).map(([k, v]) => `${k}="${v.slice(0, 30)}"`).join(', ');
+          console.log(
+            chalk.red(`      └─ input[${i}] (${varsStr}): `) +
+            chalk.dim(dsFailed.map(a => a.name).join(', ')),
+          );
+        }
+      }
+    }
   }
 
   console.log('');

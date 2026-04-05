@@ -13,6 +13,15 @@
     "test": "jest",
     "prepublishOnly": "npm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shmulikdav/Promptlock.git"
+  },
+  "homepage": "https://github.com/shmulikdav/Promptlock#readme",
+  "bugs": {
+    "url": "https://github.com/shmulikdav/Promptlock/issues"
+  },
+  "author": "Shmuli David",
   "keywords": [
     "llm",
     "prompt",
@@ -22,7 +31,9 @@
     "openai",
     "anthropic",
     "evaluation",
-    "snapshot"
+    "snapshot",
+    "ollama",
+    "prompt-engineering"
   ],
   "license": "MIT",
   "engines": {
