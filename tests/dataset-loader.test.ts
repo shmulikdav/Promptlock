@@ -30,9 +30,8 @@ describe('loadDataset', () => {
     });
 
     it('throws on unsupported extension', async () => {
-      await expect(loadDataset('test-data.csv', FIXTURES).then(() =>
-        loadDataset('promptlock.yaml', FIXTURES)
-      )).rejects.toThrow('Unsupported dataset format');
+      await expect(loadDataset('promptlock.yaml', FIXTURES))
+        .rejects.toThrow('Unsupported dataset format');
     });
 
     it('throws on invalid JSON', async () => {

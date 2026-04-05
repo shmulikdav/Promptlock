@@ -51,19 +51,54 @@ function parseJsonDataset(content: string, filePath: string): Record<string, str
 }
 
 function parseCsvDataset(content: string, filePath: string): Record<string, string>[] {
-  const Papa = require('papaparse');
-  const result = Papa.parse(content.trim(), {
-    header: true,
-    skipEmptyLines: true,
-  });
+  const lines = content.trim().split('\n').filter(line => line.trim().length > 0);
 
-  if (result.errors && result.errors.length > 0) {
-    throw new Error(`CSV parse error in ${filePath}: ${result.errors[0].message}`);
+  if (lines.length < 2) {
+    throw new Error(`Dataset CSV is empty or has no data rows: ${filePath}`);
   }
 
-  if (!result.data || result.data.length === 0) {
-    throw new Error(`Dataset CSV is empty: ${filePath}`);
+  const headers = parseCsvLine(lines[0]);
+  const data: Record<string, string>[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseCsvLine(lines[i]);
+    const row: Record<string, string> = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = values[j] ?? '';
+    }
+    data.push(row);
   }
 
-  return result.data as Record<string, string>[];
+  return data;
+}
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current.trim());
+  return result;
 }
