@@ -1,0 +1,69 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in prompt-lock
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: prompt-lock version
+      description: "Run `npx prompt-lock --version` or check your package.json"
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - OpenAI
+        - Anthropic
+        - Custom HTTP (Ollama, LM Studio, Azure, etc.)
+        - None / Not applicable
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: "Run `node --version`"
+      placeholder: "20.11.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "macOS 14.3 / Ubuntu 22.04 / Windows 11"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: "What happened? What did you expect instead?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: "Paste your prompt config and the command you ran. The simpler the config, the faster we can fix it."
+      render: js
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error output
+      description: "Paste the full error message or stack trace."
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: "Anything else? Screenshots, related issues, workarounds you tried."
