@@ -89,13 +89,13 @@ function replaceInObject(obj: Record<string, unknown>, vars: Record<string, stri
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'string') {
-      result[key] = value.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '');
+      result[key] = value.replace(/\{\{([\w.\-]+)\}\}/g, (_, k) => vars[k] ?? '');
     } else if (Array.isArray(value)) {
       result[key] = value.map(item =>
         typeof item === 'object' && item !== null
           ? replaceInObject(item as Record<string, unknown>, vars)
           : typeof item === 'string'
-            ? item.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '')
+            ? item.replace(/\{\{([\w.\-]+)\}\}/g, (_, k) => vars[k] ?? '')
             : item,
       );
     } else if (typeof value === 'object' && value !== null) {

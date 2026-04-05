@@ -106,6 +106,13 @@ export async function generateJsonReport(
       duration: r.duration,
       assertions: r.assertions,
       outputPreview: r.output.slice(0, 500),
+      datasetResults: r.datasetResults?.map(d => ({
+        vars: d.vars,
+        passed: d.passed,
+        duration: d.duration,
+        assertions: d.assertions,
+        outputPreview: d.output.slice(0, 200),
+      })),
     })),
   };
 
@@ -155,6 +162,26 @@ export async function generateHtmlReport(
           </thead>
           <tbody>${assertionRows}</tbody>
         </table>
+        ${r.datasetResults && r.datasetResults.length > 0 ? `
+        <details>
+          <summary>Dataset Results (${r.datasetResults.filter(d => d.passed).length}/${r.datasetResults.length} passed)</summary>
+          <table>
+            <thead>
+              <tr><th>#</th><th>Variables</th><th>Result</th><th>Duration</th><th>Failures</th></tr>
+            </thead>
+            <tbody>
+              ${r.datasetResults.map((d, i) => `
+                <tr class="${d.passed ? 'pass' : 'fail'}">
+                  <td>${i + 1}</td>
+                  <td><code>${escapeHtml(JSON.stringify(d.vars).slice(0, 100))}</code></td>
+                  <td>${d.passed ? '✅ Pass' : '❌ Fail'}</td>
+                  <td>${d.duration}ms</td>
+                  <td>${d.passed ? '' : escapeHtml(d.assertions.filter(a => !a.passed).map(a => a.name).join(', '))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </details>` : ''}
       </div>
     `;
   }).join('');
