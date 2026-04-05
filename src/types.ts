@@ -45,6 +45,7 @@ export interface RunResult {
   prompt: string;
   promptHash: string;
   output: string;
+  defaultVars?: Record<string, string>;
   assertions: AssertionResult[];
   passed: boolean;
   duration: number;

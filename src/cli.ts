@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import { PromptLockConfig, PromptLockProjectConfig } from './types';
+import { validateConfig } from './config-validation';
 import { runAll } from './runner';
 import { saveSnapshot, loadSnapshot, diffSnapshots } from './snapshot';
 import {
@@ -261,10 +262,13 @@ async function loadPromptConfigs(configPath?: string, filterId?: string): Promis
         const mod = require(filePath);
         const config = mod.default ?? mod;
 
-        if (Array.isArray(config)) {
-          configs.push(...config);
-        } else if (config && config.id) {
-          configs.push(config);
+        const items = Array.isArray(config) ? config : (config && config.id) ? [config] : [];
+        for (const item of items) {
+          const validation = validateConfig(item);
+          if (!validation.valid) {
+            console.warn(chalk.yellow(`⚠️  ${file}: ${validation.errors.join('; ')}`));
+          }
+          configs.push(item);
         }
       } catch (e) {
         console.error(chalk.red(`Error loading ${file}: ${(e as Error).message}`));

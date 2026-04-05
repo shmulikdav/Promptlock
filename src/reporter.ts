@@ -108,25 +108,25 @@ export async function generateHtmlReport(
     const statusIcon = r.passed ? '✅' : '❌';
     const assertionRows = r.assertions.map(a => `
       <tr class="${a.passed ? 'pass' : 'fail'}">
-        <td>${a.type}</td>
-        <td>${a.name}</td>
+        <td>${escapeHtml(a.type)}</td>
+        <td>${escapeHtml(a.name)}</td>
         <td>${a.passed ? '✅ Pass' : '❌ Fail'}</td>
-        <td>${a.expected ?? ''}</td>
-        <td>${a.actual ?? ''}</td>
-        <td>${a.message ?? ''}</td>
+        <td>${escapeHtml(a.expected ?? '')}</td>
+        <td>${escapeHtml(a.actual ?? '')}</td>
+        <td>${escapeHtml(a.message ?? '')}</td>
       </tr>
     `).join('');
 
     return `
       <div class="prompt-result ${statusClass}">
-        <h3>${statusIcon} ${escapeHtml(r.id)} <span class="meta">v${r.version ?? '?'} · ${r.provider}/${r.model} · ${r.duration}ms</span></h3>
+        <h3>${statusIcon} ${escapeHtml(r.id)} <span class="meta">v${escapeHtml(r.version ?? '?')} · ${escapeHtml(r.provider)}/${escapeHtml(r.model)} · ${r.duration}ms</span></h3>
         <details>
           <summary>Prompt</summary>
           <pre class="prompt-text">${escapeHtml(r.prompt)}</pre>
         </details>
         <details>
           <summary>Output</summary>
-          <pre class="output-text">${escapeHtml(r.output)}</pre>
+          <pre class="output-text">${escapeHtml(r.output.length > 2000 ? r.output.slice(0, 2000) + `\n... (truncated, ${r.output.length} chars total)` : r.output)}</pre>
         </details>
         <table>
           <thead>

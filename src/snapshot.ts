@@ -16,6 +16,7 @@ export async function saveSnapshot(
     promptHash: result.promptHash,
     capturedAt: result.timestamp,
     model: result.model,
+    defaultVars: result.defaultVars,
     output: result.output,
     assertionResults: result.assertions,
   };

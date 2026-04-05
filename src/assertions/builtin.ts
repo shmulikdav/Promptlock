@@ -61,7 +61,19 @@ export const builtinAssertions: Record<string, AssertionHandler> = {
 
   'matches-regex': (output, config) => {
     const pattern = config.pattern as string;
-    const regex = new RegExp(pattern);
+    let regex: RegExp;
+    try {
+      regex = new RegExp(pattern);
+    } catch (e) {
+      return {
+        type: 'matches-regex',
+        name: `matches-regex /${pattern}/`,
+        passed: false,
+        expected: `output to match /${pattern}/`,
+        actual: `invalid regex: ${(e as Error).message}`,
+        message: `Invalid regex pattern: ${(e as Error).message}`,
+      };
+    }
     const matched = regex.test(output);
     return {
       type: 'matches-regex',

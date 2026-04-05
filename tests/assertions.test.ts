@@ -62,6 +62,12 @@ describe('builtin assertions', () => {
       const result = builtinAssertions['matches-regex']('no numbers here', { pattern: '\\d+' });
       expect(result.passed).toBe(false);
     });
+
+    it('handles invalid regex pattern gracefully', () => {
+      const result = builtinAssertions['matches-regex']('some text', { pattern: '[invalid' });
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('Invalid regex');
+    });
   });
 
   describe('max-length', () => {

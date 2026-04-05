@@ -3,11 +3,20 @@ import { runPrompt, runAll } from './runner';
 import { saveSnapshot, loadSnapshot, diffSnapshots } from './snapshot';
 import { printConsoleReport, generateJsonReport, generateHtmlReport } from './reporter';
 
+export interface PromptLockOptions {
+  snapshotDir?: string;
+  reportDir?: string;
+}
+
 export class PromptLock {
   private configs: PromptLockConfig[];
+  private snapshotDir: string;
+  private reportDir: string;
 
-  constructor(config: PromptLockConfig | PromptLockConfig[]) {
+  constructor(config: PromptLockConfig | PromptLockConfig[], options?: PromptLockOptions) {
     this.configs = Array.isArray(config) ? config : [config];
+    this.snapshotDir = options?.snapshotDir ?? '.promptlock/snapshots';
+    this.reportDir = options?.reportDir ?? '.promptlock/reports';
   }
 
   async run(): Promise<RunResult[]> {
@@ -15,21 +24,23 @@ export class PromptLock {
   }
 
   async snapshot(snapshotDir?: string): Promise<string[]> {
+    const dir = snapshotDir ?? this.snapshotDir;
     const results = await this.run();
     const paths: string[] = [];
     for (const result of results) {
-      const p = await saveSnapshot(result, snapshotDir);
+      const p = await saveSnapshot(result, dir);
       paths.push(p);
     }
     return paths;
   }
 
   async diff(snapshotDir?: string): Promise<DiffResult[]> {
+    const dir = snapshotDir ?? this.snapshotDir;
     const results = await this.run();
     const diffs: DiffResult[] = [];
 
     for (const result of results) {
-      const snap = await loadSnapshot(result.id, snapshotDir);
+      const snap = await loadSnapshot(result.id, dir);
       if (snap) {
         diffs.push(diffSnapshots(snap, result.output));
       }
@@ -39,6 +50,7 @@ export class PromptLock {
   }
 
   async report(format: 'json' | 'html' | 'console' = 'console', reportDir?: string): Promise<void> {
+    const dir = reportDir ?? this.reportDir;
     const results = await this.run();
 
     switch (format) {
@@ -46,12 +58,12 @@ export class PromptLock {
         printConsoleReport(results);
         break;
       case 'json': {
-        const p = await generateJsonReport(results, reportDir);
+        const p = await generateJsonReport(results, dir);
         console.log(`Report saved: ${p}`);
         break;
       }
       case 'html': {
-        const p = await generateHtmlReport(results, reportDir);
+        const p = await generateHtmlReport(results, dir);
         console.log(`Report saved: ${p}`);
         break;
       }
@@ -70,4 +82,5 @@ export {
   generateJsonReport,
   generateHtmlReport,
 } from './reporter';
+export { validateConfig } from './config-validation';
 export * from './types';

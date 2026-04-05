@@ -2,9 +2,33 @@ import { PromptLockConfig, RunResult } from './types';
 import { getProvider } from './providers';
 import { runAssertions } from './assertions';
 import { renderTemplate, hashString } from './utils';
+import { validateConfig } from './config-validation';
 
 export async function runPrompt(config: PromptLockConfig): Promise<RunResult> {
   const startTime = Date.now();
+
+  // Validate config before running
+  const validation = validateConfig(config);
+  if (!validation.valid) {
+    return {
+      id: config.id ?? 'unknown',
+      version: config.version,
+      provider: config.provider ?? 'unknown',
+      model: config.model ?? 'unknown',
+      prompt: config.prompt ?? '',
+      promptHash: '',
+      output: '',
+      assertions: [{
+        type: 'error',
+        name: 'config-validation',
+        passed: false,
+        message: `Invalid config: ${validation.errors.join('; ')}`,
+      }],
+      passed: false,
+      duration: 0,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
   // Render template with variables
   const renderedPrompt = config.defaultVars
@@ -29,6 +53,7 @@ export async function runPrompt(config: PromptLockConfig): Promise<RunResult> {
     prompt: renderedPrompt,
     promptHash: `sha256:${hashString(renderedPrompt)}`,
     output,
+    defaultVars: config.defaultVars,
     assertions: assertionResults,
     passed: allPassed,
     duration,
