@@ -98,7 +98,7 @@ export class PromptLock {
 }
 
 // Re-export everything
-export { runPrompt, runAll } from './runner';
+export { runPrompt, runAll, runAB } from './runner';
 export type { RunOptions } from './runner';
 export { saveSnapshot, loadSnapshot, loadSnapshotHistory, listSnapshots, diffSnapshots } from './snapshot';
 export { runAssertions } from './assertions';
@@ -110,6 +110,8 @@ export {
   generateJsonReport,
   generateHtmlReport,
   generateMarkdownReport,
+  printABReport,
+  generateABMarkdownReport,
 } from './reporter';
 export { estimateCost, getPricingTable } from './pricing';
 export { loadDataset } from './dataset-loader';

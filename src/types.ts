@@ -107,6 +107,21 @@ export interface DatasetRunResult {
   cost?: number;
 }
 
+// ── A/B Comparison ──────────────────────────────────────────────────────────
+
+export interface ABComparisonResult {
+  id: string;
+  variantA: RunResult;
+  variantB: RunResult;
+  winner: 'A' | 'B' | 'tie';
+  deltas: {
+    passRate: number;     // B - A, in percentage points (0-100)
+    costDollars: number;  // B - A, USD
+    latencyMs: number;    // B - A, ms
+    tokens: number;       // B - A, total tokens
+  };
+}
+
 // ── Snapshot ─────────────────────────────────────────────────────────────────
 
 export interface SnapshotData {

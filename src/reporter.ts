@@ -1,6 +1,6 @@
 import * as path from 'path';
 import chalk from 'chalk';
-import { RunResult, DiffResult } from './types';
+import { RunResult, DiffResult, ABComparisonResult } from './types';
 import { ensureDir, writeJsonFile } from './utils';
 import * as fs from 'fs';
 
@@ -296,6 +296,95 @@ export async function generateMarkdownReport(
       }
       md += `\n`;
     }
+  }
+
+  await ensureDir(outputDir);
+  await fs.promises.writeFile(filePath, md, 'utf-8');
+  return filePath;
+}
+
+export function printABReport(result: ABComparisonResult): void {
+  const { variantA: a, variantB: b, winner, deltas } = result;
+
+  console.log('');
+  console.log(chalk.bold(`A/B Comparison: ${result.id}`));
+  console.log('');
+
+  const passA = `${a.assertions.filter(x => x.passed).length}/${a.assertions.length}`;
+  const passB = `${b.assertions.filter(x => x.passed).length}/${b.assertions.length}`;
+
+  const rows: [string, string, string, string][] = [
+    ['Status', `${a.passed ? '✅' : '❌'} ${passA} passed`, `${b.passed ? '✅' : '❌'} ${passB} passed`, '—'],
+    ['Latency', `${a.duration}ms`, `${b.duration}ms`, formatDelta(deltas.latencyMs, 'ms')],
+  ];
+
+  if ((a.cost ?? 0) > 0 || (b.cost ?? 0) > 0) {
+    rows.push(['Cost', `$${(a.cost ?? 0).toFixed(6)}`, `$${(b.cost ?? 0).toFixed(6)}`, formatDelta(deltas.costDollars, '$', true)]);
+  }
+
+  if ((a.tokens?.totalTokens ?? 0) > 0 || (b.tokens?.totalTokens ?? 0) > 0) {
+    rows.push(['Tokens', `${a.tokens?.totalTokens ?? 0}`, `${b.tokens?.totalTokens ?? 0}`, formatDelta(deltas.tokens, '')]);
+  }
+
+  // Print aligned table
+  const colWidths = [12, 22, 22, 14];
+  printTableRow(['Metric', 'Variant A', 'Variant B', 'Delta'], colWidths, true);
+  printTableRow(colWidths.map(w => '─'.repeat(w)) as [string, string, string, string], colWidths, false);
+  for (const row of rows) printTableRow(row, colWidths, false);
+
+  console.log('');
+  if (winner === 'tie') {
+    console.log(chalk.yellow('Result: Tie — variants are equivalent'));
+  } else {
+    const name = winner === 'A' ? 'Variant A' : 'Variant B';
+    console.log(chalk.green.bold(`Winner: ${name}`));
+  }
+  console.log('');
+}
+
+function formatDelta(value: number, unit: string, isDollar = false): string {
+  if (value === 0) return '—';
+  const sign = value > 0 ? '+' : '';
+  if (isDollar) return `${sign}$${value.toFixed(6)}`;
+  return `${sign}${value}${unit}`;
+}
+
+function printTableRow(cells: [string, string, string, string], widths: number[], bold: boolean): void {
+  const padded = cells.map((c, i) => c.padEnd(widths[i]));
+  const line = `| ${padded.join(' | ')} |`;
+  console.log(bold ? chalk.bold(line) : line);
+}
+
+export async function generateABMarkdownReport(
+  result: ABComparisonResult,
+  outputDir: string = DEFAULT_REPORT_DIR,
+): Promise<string> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filePath = path.join(outputDir, `ab-${timestamp}.md`);
+
+  const { variantA: a, variantB: b, winner, deltas } = result;
+  const passA = `${a.assertions.filter(x => x.passed).length}/${a.assertions.length}`;
+  const passB = `${b.assertions.filter(x => x.passed).length}/${b.assertions.length}`;
+
+  let md = `# A/B Comparison: ${result.id}\n\n`;
+
+  md += `| Metric | Variant A (${a.id}) | Variant B (${b.id}) | Delta |\n`;
+  md += `|--------|---------------------|---------------------|-------|\n`;
+  md += `| Status | ${a.passed ? 'Pass' : 'FAIL'} ${passA} | ${b.passed ? 'Pass' : 'FAIL'} ${passB} | — |\n`;
+  md += `| Latency | ${a.duration}ms | ${b.duration}ms | ${formatDelta(deltas.latencyMs, 'ms')} |\n`;
+  if ((a.cost ?? 0) > 0 || (b.cost ?? 0) > 0) {
+    md += `| Cost | $${(a.cost ?? 0).toFixed(6)} | $${(b.cost ?? 0).toFixed(6)} | ${formatDelta(deltas.costDollars, '$', true)} |\n`;
+  }
+  if ((a.tokens?.totalTokens ?? 0) > 0 || (b.tokens?.totalTokens ?? 0) > 0) {
+    md += `| Tokens | ${a.tokens?.totalTokens ?? 0} | ${b.tokens?.totalTokens ?? 0} | ${formatDelta(deltas.tokens, '')} |\n`;
+  }
+  md += `\n`;
+
+  if (winner === 'tie') {
+    md += `**Result:** Tie — variants are equivalent\n`;
+  } else {
+    const name = winner === 'A' ? `Variant A (${a.id})` : `Variant B (${b.id})`;
+    md += `**Winner:** ${name}\n`;
   }
 
   await ensureDir(outputDir);

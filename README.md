@@ -244,6 +244,7 @@ prompt-lock run --parallel         # Run prompts in parallel
 prompt-lock run --concurrency 10   # Max concurrent runs (default: 5)
 prompt-lock run --cache            # Cache LLM outputs (skip unchanged prompts)
 prompt-lock run --watch            # Watch for file changes and re-run
+prompt-lock run --ab v1:v2         # A/B compare two prompt IDs side-by-side
 prompt-lock run --github-pr owner/repo#123  # Post results as PR comment
 ```
 
@@ -296,6 +297,61 @@ prompt-lock run --cache
 # Clear cache when you want fresh results
 prompt-lock cache clear
 ```
+
+### A/B Testing Mode
+
+Compare two prompt variants side-by-side and pick a winner:
+
+```bash
+prompt-lock run --ab summarizer-v1:summarizer-v2
+```
+
+Output:
+
+```
+A/B Comparison: summarizer-v1 vs summarizer-v2
+
+| Metric  | Variant A         | Variant B         | Delta     |
+| ------- | ----------------- | ----------------- | --------- |
+| Status  | ✅ 5/5 passed     | ✅ 5/5 passed     | —         |
+| Latency | 1250ms            | 980ms             | -270ms    |
+| Cost    | $0.004500         | $0.003200         | -$0.00130 |
+| Tokens  | 1234              | 987               | -247      |
+
+Winner: Variant B
+```
+
+**Winner logic:**
+1. Higher pass rate wins
+2. Otherwise: >5% cheaper wins
+3. Otherwise: >10% faster wins
+4. Otherwise: tie
+
+For signal over noise, use a `dataset` of size 5+ when A/B testing — a single LLM call isn't statistically meaningful.
+
+Programmatic API:
+
+```typescript
+import { runAB } from 'prompt-lock';
+
+const result = await runAB(variantA, variantB);
+console.log(result.winner);  // 'A' | 'B' | 'tie'
+console.log(result.deltas.costDollars);
+```
+
+### YAML Autocomplete (JSON Schema)
+
+Get IDE autocomplete, validation, and inline docs for YAML configs. Add this comment at the top of your `promptlock.yaml`:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shmulikdav/Promptlock/main/schemas/promptlock.schema.json
+id: my-prompt
+provider: anthropic
+model: claude-sonnet-4-20250514
+# VS Code now suggests all valid fields and assertion types
+```
+
+Install the [YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml) in VS Code to enable schema support.
 
 ### Cost & Token Tracking
 

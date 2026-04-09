@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { PromptLockConfig, PromptLockProjectConfig } from './types';
 import { validateConfig } from './config-validation';
-import { runAll, RunOptions } from './runner';
+import { runAll, runAB, RunOptions } from './runner';
 import { postPRComment } from './github';
 import { OutputCache } from './cache';
 import { saveSnapshot, loadSnapshot, loadSnapshotHistory, diffSnapshots } from './snapshot';
@@ -16,6 +16,8 @@ import {
   generateJsonReport,
   generateHtmlReport,
   generateMarkdownReport,
+  printABReport,
+  generateABMarkdownReport,
 } from './reporter';
 import { loadConfigFile, discoverConfigFile } from './config-loader';
 import { ensureDir, writeJsonFile, spinner } from './utils';
@@ -25,7 +27,7 @@ const program = new Command();
 program
   .name('prompt-lock')
   .description('Version control and behavioral regression testing for LLM prompts')
-  .version('0.3.0');
+  .version('0.4.0');
 
 // ── init ──────────────────────────────────────────────────────────────────────
 
@@ -148,6 +150,7 @@ program
   .option('--no-cache', 'Disable output caching')
   .option('--github-pr <pr>', 'Post results as a GitHub PR comment (e.g. owner/repo#123)')
   .option('--watch', 'Watch for file changes and re-run automatically')
+  .option('--ab <pair>', 'Compare two prompt IDs side-by-side (e.g. "v1:v2")')
   .action(async (opts) => {
     const configs = await loadPromptConfigs(opts.config, opts.id);
 
@@ -155,6 +158,63 @@ program
       console.log(chalk.yellow('No prompt configurations found.'));
       console.log(chalk.dim('Run "prompt-lock init" to get started, or create files in ./prompts/'));
       process.exitCode = 1;
+      return;
+    }
+
+    // A/B testing mode
+    if (opts.ab) {
+      const [idA, idB] = String(opts.ab).split(':');
+      if (!idA || !idB) {
+        console.log(chalk.red('Invalid --ab format. Use: --ab <variant-a-id>:<variant-b-id>'));
+        process.exitCode = 1;
+        return;
+      }
+
+      const variantA = configs.find(c => c.id === idA);
+      const variantB = configs.find(c => c.id === idB);
+
+      if (!variantA) {
+        console.log(chalk.red(`Variant A not found: "${idA}"`));
+        process.exitCode = 1;
+        return;
+      }
+      if (!variantB) {
+        console.log(chalk.red(`Variant B not found: "${idB}"`));
+        process.exitCode = 1;
+        return;
+      }
+
+      const projectConfigAB = loadProjectConfig(opts.config);
+      const cacheDirAB = projectConfigAB?.snapshotDir
+        ? path.join(path.dirname(projectConfigAB.snapshotDir), 'cache')
+        : '.promptlock/cache';
+
+      const abRunOpts: RunOptions = {
+        verbose: opts.verbose,
+        cache: opts.cache ?? false,
+        cacheDir: cacheDirAB,
+        retry: { maxRetries: 3 },
+      };
+
+      const spinAB = spinner(`Running A/B: ${idA} vs ${idB}...`);
+      const abResult = await runAB(variantA, variantB, abRunOpts);
+      spinAB.stop(`Completed A/B comparison.`);
+
+      printABReport(abResult);
+
+      // Write markdown report if requested
+      const abReportDir = projectConfigAB?.reportDir ?? '.promptlock/reports';
+      const abFormats = parseReportFormats(opts.report, projectConfigAB);
+      if (abFormats.includes('markdown')) {
+        const p = await generateABMarkdownReport(abResult, abReportDir);
+        console.log(chalk.dim(`Report saved: ${p}`));
+      }
+
+      // Exit code for CI
+      const abFailed = !abResult.variantA.passed || !abResult.variantB.passed;
+      if (abFailed && (opts.ci || projectConfigAB?.ci?.failOnRegression)) {
+        process.exitCode = 1;
+      }
       return;
     }
 

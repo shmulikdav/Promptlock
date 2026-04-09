@@ -1,4 +1,4 @@
-import { PromptLockConfig, RunResult, DatasetRunResult, AssertionConfig, TokenUsage } from './types';
+import { PromptLockConfig, RunResult, DatasetRunResult, AssertionConfig, TokenUsage, ABComparisonResult } from './types';
 import { getProvider } from './providers';
 import { runAssertions } from './assertions';
 import { renderTemplate, hashString } from './utils';
@@ -309,4 +309,87 @@ async function runAssertionsEnriched(
 function providerName(config: PromptLockConfig): string {
   if (typeof config.provider === 'string') return config.provider;
   return `custom:${config.provider.url}`;
+}
+
+// ── A/B Testing ─────────────────────────────────────────────────────────────
+
+export async function runAB(
+  variantA: PromptLockConfig,
+  variantB: PromptLockConfig,
+  opts?: RunOptions,
+): Promise<ABComparisonResult> {
+  opts?.onProgress?.(variantA.id, 'running variant A...');
+  const a = await runSafe(variantA, opts);
+  opts?.onResult?.(a);
+
+  opts?.onProgress?.(variantB.id, 'running variant B...');
+  const b = await runSafe(variantB, opts);
+  opts?.onResult?.(b);
+
+  const passRateA = computePassRate(a);
+  const passRateB = computePassRate(b);
+
+  const costA = a.cost ?? 0;
+  const costB = b.cost ?? 0;
+
+  const tokensA = a.tokens?.totalTokens ?? 0;
+  const tokensB = b.tokens?.totalTokens ?? 0;
+
+  const deltas = {
+    passRate: passRateB - passRateA,
+    costDollars: costB - costA,
+    latencyMs: b.duration - a.duration,
+    tokens: tokensB - tokensA,
+  };
+
+  return {
+    id: `${variantA.id} vs ${variantB.id}`,
+    variantA: a,
+    variantB: b,
+    winner: pickWinner(a, b, passRateA, passRateB, costA, costB),
+    deltas,
+  };
+}
+
+function computePassRate(r: RunResult): number {
+  // Combine main assertions + dataset assertions for an overall pass-rate (0-100)
+  let total = r.assertions.length;
+  let passed = r.assertions.filter(x => x.passed).length;
+  if (r.datasetResults) {
+    for (const d of r.datasetResults) {
+      total += d.assertions.length;
+      passed += d.assertions.filter(x => x.passed).length;
+    }
+  }
+  if (total === 0) return 0;
+  return (passed / total) * 100;
+}
+
+function pickWinner(
+  a: RunResult,
+  b: RunResult,
+  passRateA: number,
+  passRateB: number,
+  costA: number,
+  costB: number,
+): 'A' | 'B' | 'tie' {
+  // 1. Pass rate wins if difference > 0
+  if (passRateA > passRateB) return 'A';
+  if (passRateB > passRateA) return 'B';
+
+  // 2. Cost: cheaper wins if difference > 5%
+  if (costA > 0 || costB > 0) {
+    const maxCost = Math.max(costA, costB);
+    const delta = Math.abs(costB - costA) / maxCost;
+    if (delta > 0.05) return costA < costB ? 'A' : 'B';
+  }
+
+  // 3. Latency: faster wins if difference > 10%
+  const maxLatency = Math.max(a.duration, b.duration);
+  if (maxLatency > 0) {
+    const delta = Math.abs(b.duration - a.duration) / maxLatency;
+    if (delta > 0.10) return a.duration < b.duration ? 'A' : 'B';
+  }
+
+  return 'tie';
 }

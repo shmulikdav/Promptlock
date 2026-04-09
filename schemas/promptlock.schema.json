@@ -1,0 +1,271 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/shmulikdav/Promptlock/main/schemas/promptlock.schema.json",
+  "title": "prompt-lock config",
+  "description": "Configuration schema for a prompt-lock test definition. Can be a single config object or an array of configs.",
+  "oneOf": [
+    { "$ref": "#/definitions/PromptLockConfig" },
+    {
+      "type": "array",
+      "items": { "$ref": "#/definitions/PromptLockConfig" }
+    }
+  ],
+  "definitions": {
+    "PromptLockConfig": {
+      "type": "object",
+      "required": ["id", "provider", "model", "prompt", "assertions"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this prompt. Used in reports and to filter runs with --id."
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version string for this prompt, used in snapshot history."
+        },
+        "provider": {
+          "description": "LLM provider: 'openai', 'anthropic', or a custom HTTP endpoint.",
+          "oneOf": [
+            { "type": "string", "enum": ["openai", "anthropic"] },
+            { "$ref": "#/definitions/CustomProviderConfig" }
+          ]
+        },
+        "model": {
+          "type": "string",
+          "description": "Model ID to use (e.g. 'gpt-4o-mini', 'claude-sonnet-4-20250514')."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The prompt text. Use {{variableName}} for template variables."
+        },
+        "defaultVars": {
+          "type": "object",
+          "description": "Default values for template variables in the prompt.",
+          "additionalProperties": { "type": "string" }
+        },
+        "dataset": {
+          "description": "Test inputs: an inline array of variable objects, or a file path string (.csv or .json).",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+              }
+            },
+            {
+              "type": "string",
+              "pattern": "\\.(csv|json)$"
+            }
+          ]
+        },
+        "assertions": {
+          "type": "array",
+          "description": "Behavioral assertions to run against the output.",
+          "items": { "$ref": "#/definitions/Assertion" }
+        },
+        "options": {
+          "$ref": "#/definitions/PromptLockOptions"
+        }
+      }
+    },
+    "CustomProviderConfig": {
+      "type": "object",
+      "required": ["type", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "custom" },
+        "url": {
+          "type": "string",
+          "description": "HTTP/HTTPS endpoint URL for the custom LLM provider.",
+          "pattern": "^https?://"
+        },
+        "headers": {
+          "type": "object",
+          "description": "Custom HTTP headers (e.g. Authorization).",
+          "additionalProperties": { "type": "string" }
+        },
+        "bodyTemplate": {
+          "type": "object",
+          "description": "Custom request body template with {{prompt}} and {{model}} placeholders."
+        },
+        "responsePath": {
+          "type": "string",
+          "description": "JSONPath to extract the response text (e.g. 'choices[0].message.content')."
+        }
+      }
+    },
+    "PromptLockOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "maxTokens": { "type": "integer", "minimum": 1 },
+        "timeout": { "type": "integer", "minimum": 1 },
+        "parallel": { "type": "boolean" },
+        "concurrency": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "Assertion": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "value"],
+          "properties": {
+            "type": { "const": "contains" },
+            "value": { "type": "string", "description": "String that must appear in the output." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "value"],
+          "properties": {
+            "type": { "const": "not-contains" },
+            "value": { "type": "string", "description": "String that must NOT appear in the output." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "values"],
+          "properties": {
+            "type": { "const": "contains-all" },
+            "values": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "All strings that must appear in the output."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "value"],
+          "properties": {
+            "type": { "const": "starts-with" },
+            "value": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "value"],
+          "properties": {
+            "type": { "const": "ends-with" },
+            "value": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "pattern"],
+          "properties": {
+            "type": { "const": "matches-regex" },
+            "pattern": { "type": "string", "description": "JavaScript regex pattern." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "chars"],
+          "properties": {
+            "type": { "const": "max-length" },
+            "chars": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "chars"],
+          "properties": {
+            "type": { "const": "min-length" },
+            "chars": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "json-valid" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "schema"],
+          "properties": {
+            "type": { "const": "json-schema" },
+            "schema": {
+              "type": "object",
+              "description": "JSON Schema the output must validate against."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "no-hallucination-words" },
+            "words": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Hallucination indicator words to check for (default list used if omitted)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "no-duplicates" },
+            "separator": {
+              "type": "string",
+              "description": "Separator to split the output by (default '\\n')."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "ms"],
+          "properties": {
+            "type": { "const": "max-latency" },
+            "ms": { "type": "integer", "minimum": 0, "description": "Max LLM response time in milliseconds." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "dollars"],
+          "properties": {
+            "type": { "const": "max-cost" },
+            "dollars": { "type": "number", "minimum": 0, "description": "Max cost in USD for the LLM call." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "judge", "criteria"],
+          "properties": {
+            "type": { "const": "llm-judge" },
+            "judge": {
+              "type": "object",
+              "required": ["provider", "model"],
+              "properties": {
+                "provider": {
+                  "oneOf": [
+                    { "type": "string", "enum": ["openai", "anthropic"] },
+                    { "$ref": "#/definitions/CustomProviderConfig" }
+                  ]
+                },
+                "model": { "type": "string" }
+              }
+            },
+            "criteria": { "type": "string", "description": "Evaluation criteria for the judge LLM." },
+            "threshold": { "type": "number", "minimum": 0, "maximum": 1, "description": "Pass threshold (0-1). Default 0.7." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "name"],
+          "properties": {
+            "type": { "const": "custom" },
+            "name": { "type": "string" },
+            "fn": { "description": "Function returning boolean or Promise<boolean>. JS configs only." }
+          }
+        }
+      ]
+    }
+  }
+}

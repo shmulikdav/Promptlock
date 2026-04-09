@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-09
+
+### Added
+
+- **A/B testing mode** — compare two prompt variants side-by-side with `prompt-lock run --ab v1:v2`. Shows cost, latency, token, and pass-rate deltas; picks a winner based on pass rate → cost (5% threshold) → latency (10% threshold).
+- **`runAB()` programmatic API** — call `runAB(variantA, variantB, opts)` to get an `ABComparisonResult` with winner and deltas.
+- **A/B markdown reports** — `generateABMarkdownReport()` writes comparison tables to `.promptlock/reports/ab-<timestamp>.md`, ideal for PR comments.
+- **JSON Schema for configs** — `schemas/promptlock.schema.json` ships with the package. YAML/JSON users get IDE autocomplete and validation by adding:
+  ```yaml
+  # yaml-language-server: $schema=https://raw.githubusercontent.com/shmulikdav/Promptlock/main/schemas/promptlock.schema.json
+  ```
+
+### Changed
+
+- `files` field in package.json now includes `schemas/` directory so the schema ships with npm.
+
 ## [0.3.0] - 2026-04-05
 
 ### Added
