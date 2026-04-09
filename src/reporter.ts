@@ -129,6 +129,292 @@ export async function generateJsonReport(
   return filePath;
 }
 
+// ── Shared dark theme CSS for all HTML reports ──────────────────────────────
+
+const DARK_THEME_CSS = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --card-2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --pass: #3fb950;
+    --fail: #f85149;
+    --warn: #d29922;
+    --highlight: #238636;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 2rem 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .mono { font-family: "SF Mono", Monaco, Inconsolata, "Roboto Mono", "Courier New", monospace; }
+  header { margin-bottom: 2rem; }
+  header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.25rem;
+  }
+  header .subtitle { color: var(--text-dim); font-size: 0.9rem; }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+  .metric-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+  }
+  .metric-card .label {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+  .metric-card .value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-family: "SF Mono", Monaco, monospace;
+  }
+  .metric-card.pass .value { color: var(--pass); }
+  .metric-card.fail .value { color: var(--fail); }
+  .metric-card.accent .value { color: var(--accent); }
+  .prompt-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--pass);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .prompt-card.failed { border-left-color: var(--fail); }
+  .prompt-card .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .prompt-card h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .prompt-card .meta {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-family: "SF Mono", Monaco, monospace;
+  }
+  .chip {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 0.35rem;
+    margin-bottom: 0.25rem;
+  }
+  .chip.pass { background: rgba(63, 185, 80, 0.15); color: var(--pass); border: 1px solid rgba(63, 185, 80, 0.4); }
+  .chip.fail { background: rgba(248, 81, 73, 0.15); color: var(--fail); border: 1px solid rgba(248, 81, 73, 0.4); }
+  .assertions { margin-top: 0.75rem; }
+  details {
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+  }
+  summary {
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    padding: 0.25rem 0;
+    user-select: none;
+  }
+  summary:hover { color: var(--text); }
+  pre {
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.9rem;
+    margin-top: 0.5rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    font-family: "SF Mono", Monaco, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+  }
+  th, td {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--card-2);
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+  }
+  tr.fail td { background: rgba(248, 81, 73, 0.06); }
+  code {
+    font-family: "SF Mono", Monaco, monospace;
+    background: var(--card-2);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ── A/B specific styles ── */
+  .winner-banner {
+    background: linear-gradient(135deg, rgba(35, 134, 54, 0.2), rgba(88, 166, 255, 0.1));
+    border: 1px solid var(--highlight);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin: 1.5rem 0 2rem;
+    text-align: center;
+  }
+  .winner-banner .trophy { font-size: 2rem; margin-bottom: 0.5rem; }
+  .winner-banner h2 {
+    font-size: 1.5rem;
+    color: var(--pass);
+    margin-bottom: 0.25rem;
+  }
+  .winner-banner .subtext { color: var(--text-dim); font-size: 0.9rem; }
+  .ab-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 720px) {
+    .ab-grid { grid-template-columns: 1fr; }
+  }
+  .variant-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+  .variant-card.winner {
+    border-color: var(--highlight);
+    box-shadow: 0 0 0 2px rgba(35, 134, 54, 0.3);
+  }
+  .variant-card .variant-label {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+  .variant-card.winner .variant-label { color: var(--pass); }
+  .variant-card h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    word-break: break-word;
+  }
+  .variant-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .variant-metrics .m {
+    background: var(--card-2);
+    border-radius: 6px;
+    padding: 0.75rem;
+  }
+  .variant-metrics .m .label {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+  .variant-metrics .m .value {
+    font-family: "SF Mono", Monaco, monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+  .delta-bar {
+    margin: 0.5rem 0 1rem;
+  }
+  .delta-bar .label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.35rem;
+  }
+  .delta-bar .track {
+    background: var(--card-2);
+    height: 10px;
+    border-radius: 5px;
+    position: relative;
+    overflow: hidden;
+  }
+  .delta-bar .fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 5px;
+  }
+  .delta-bar .fill.a { background: var(--accent); opacity: 0.6; }
+  .delta-bar .fill.b { background: var(--pass); opacity: 0.8; }
+`;
+
+function renderHtmlShell(title: string, body: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(title)}</title>
+<style>${DARK_THEME_CSS}</style>
+</head>
+<body>
+${body}
+<footer>
+  Generated by <a href="https://www.npmjs.com/package/prompt-lock" target="_blank">prompt-lock</a> · ${new Date().toISOString()}
+</footer>
+</body>
+</html>`;
+}
+
+function renderAssertionChips(assertions: { type: string; name: string; passed: boolean }[]): string {
+  return assertions.map(a => `<span class="chip ${a.passed ? 'pass' : 'fail'}">${a.passed ? '✓' : '✗'} ${escapeHtml(a.name)}</span>`).join('');
+}
+
 export async function generateHtmlReport(
   results: RunResult[],
   outputDir: string = DEFAULT_REPORT_DIR,
@@ -139,104 +425,114 @@ export async function generateHtmlReport(
   const total = results.length;
   const passed = results.filter(r => r.passed).length;
   const failed = total - passed;
+  const totalCost = results.reduce((sum, r) => sum + (r.cost ?? 0), 0);
+  const totalTokens = results.reduce((sum, r) => sum + (r.tokens?.totalTokens ?? 0), 0);
+  const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
 
-  const resultRows = results.map(r => {
-    const statusClass = r.passed ? 'pass' : 'fail';
-    const statusIcon = r.passed ? '✅' : '❌';
-    const assertionRows = r.assertions.map(a => `
-      <tr class="${a.passed ? 'pass' : 'fail'}">
-        <td>${escapeHtml(a.type)}</td>
-        <td>${escapeHtml(a.name)}</td>
-        <td>${a.passed ? '✅ Pass' : '❌ Fail'}</td>
-        <td>${escapeHtml(a.expected ?? '')}</td>
-        <td>${escapeHtml(a.actual ?? '')}</td>
-        <td>${escapeHtml(a.message ?? '')}</td>
-      </tr>
-    `).join('');
+  const summaryCards = `
+    <div class="summary-grid">
+      <div class="metric-card accent">
+        <div class="label">Total prompts</div>
+        <div class="value">${total}</div>
+      </div>
+      <div class="metric-card pass">
+        <div class="label">Passed</div>
+        <div class="value">${passed}</div>
+      </div>
+      <div class="metric-card ${failed > 0 ? 'fail' : ''}">
+        <div class="label">Failed</div>
+        <div class="value">${failed}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Duration</div>
+        <div class="value mono">${totalDuration}ms</div>
+      </div>
+      ${totalCost > 0 ? `
+      <div class="metric-card">
+        <div class="label">Cost</div>
+        <div class="value mono">$${totalCost.toFixed(6)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Tokens</div>
+        <div class="value mono">${totalTokens.toLocaleString()}</div>
+      </div>` : ''}
+    </div>
+  `;
+
+  const promptCards = results.map(r => {
+    const statusClass = r.passed ? '' : 'failed';
+    const assertionTable = r.assertions.length > 0 ? `
+      <details open>
+        <summary>Assertion details (${r.assertions.filter(a => a.passed).length}/${r.assertions.length})</summary>
+        <table>
+          <thead><tr><th>Type</th><th>Name</th><th>Result</th><th>Expected</th><th>Actual</th></tr></thead>
+          <tbody>
+            ${r.assertions.map(a => `
+              <tr class="${a.passed ? '' : 'fail'}">
+                <td>${escapeHtml(a.type)}</td>
+                <td>${escapeHtml(a.name)}</td>
+                <td>${a.passed ? '<span class="chip pass">Pass</span>' : '<span class="chip fail">Fail</span>'}</td>
+                <td>${escapeHtml(a.expected ?? '—')}</td>
+                <td>${escapeHtml(a.actual ?? '—')}${a.message ? ' · ' + escapeHtml(a.message) : ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </details>` : '';
+
+    const datasetSection = r.datasetResults && r.datasetResults.length > 0 ? `
+      <details>
+        <summary>Dataset (${r.datasetResults.filter(d => d.passed).length}/${r.datasetResults.length} inputs passed)</summary>
+        <table>
+          <thead><tr><th>#</th><th>Variables</th><th>Result</th><th>Duration</th><th>Failures</th></tr></thead>
+          <tbody>
+            ${r.datasetResults.map((d, i) => `
+              <tr class="${d.passed ? '' : 'fail'}">
+                <td>${i + 1}</td>
+                <td><code>${escapeHtml(JSON.stringify(d.vars).slice(0, 80))}</code></td>
+                <td>${d.passed ? '<span class="chip pass">Pass</span>' : '<span class="chip fail">Fail</span>'}</td>
+                <td>${d.duration}ms</td>
+                <td>${d.passed ? '—' : escapeHtml(d.assertions.filter(a => !a.passed).map(a => a.name).join(', '))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </details>` : '';
 
     return `
-      <div class="prompt-result ${statusClass}">
-        <h3>${statusIcon} ${escapeHtml(r.id)} <span class="meta">v${escapeHtml(r.version ?? '?')} · ${escapeHtml(r.provider)}/${escapeHtml(r.model)} · ${r.duration}ms</span></h3>
+      <div class="prompt-card ${statusClass}">
+        <div class="title-row">
+          <h2>${r.passed ? '✓' : '✗'} ${escapeHtml(r.id)}</h2>
+          <div class="meta">${escapeHtml(r.provider)}/${escapeHtml(r.model)} · ${r.duration}ms${r.cost ? ` · $${r.cost.toFixed(6)}` : ''}${r.tokens ? ` · ${r.tokens.totalTokens} tokens` : ''}</div>
+        </div>
+        <div class="assertions">
+          ${renderAssertionChips(r.assertions)}
+        </div>
+        ${assertionTable}
+        ${datasetSection}
         <details>
           <summary>Prompt</summary>
-          <pre class="prompt-text">${escapeHtml(r.prompt)}</pre>
+          <pre>${escapeHtml(r.prompt)}</pre>
         </details>
         <details>
           <summary>Output</summary>
-          <pre class="output-text">${escapeHtml(r.output.length > 2000 ? r.output.slice(0, 2000) + `\n... (truncated, ${r.output.length} chars total)` : r.output)}</pre>
+          <pre>${escapeHtml(r.output.length > 2000 ? r.output.slice(0, 2000) + `\n... (truncated, ${r.output.length} chars total)` : r.output)}</pre>
         </details>
-        <table>
-          <thead>
-            <tr><th>Type</th><th>Name</th><th>Result</th><th>Expected</th><th>Actual</th><th>Message</th></tr>
-          </thead>
-          <tbody>${assertionRows}</tbody>
-        </table>
-        ${r.datasetResults && r.datasetResults.length > 0 ? `
-        <details>
-          <summary>Dataset Results (${r.datasetResults.filter(d => d.passed).length}/${r.datasetResults.length} passed)</summary>
-          <table>
-            <thead>
-              <tr><th>#</th><th>Variables</th><th>Result</th><th>Duration</th><th>Failures</th></tr>
-            </thead>
-            <tbody>
-              ${r.datasetResults.map((d, i) => `
-                <tr class="${d.passed ? 'pass' : 'fail'}">
-                  <td>${i + 1}</td>
-                  <td><code>${escapeHtml(JSON.stringify(d.vars).slice(0, 100))}</code></td>
-                  <td>${d.passed ? '✅ Pass' : '❌ Fail'}</td>
-                  <td>${d.duration}ms</td>
-                  <td>${d.passed ? '' : escapeHtml(d.assertions.filter(a => !a.passed).map(a => a.name).join(', '))}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </details>` : ''}
       </div>
     `;
   }).join('');
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>prompt-lock Report</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 2rem; background: #f8f9fa; color: #212529; }
-    h1 { margin-bottom: 0.5rem; }
-    .summary { margin-bottom: 2rem; padding: 1rem; background: white; border-radius: 8px; border: 1px solid #dee2e6; }
-    .summary .stat { display: inline-block; margin-right: 2rem; font-size: 1.1rem; }
-    .stat.fail-count { color: #dc3545; font-weight: bold; }
-    .stat.pass-count { color: #28a745; font-weight: bold; }
-    .prompt-result { margin-bottom: 1.5rem; padding: 1rem; background: white; border-radius: 8px; border-left: 4px solid #28a745; }
-    .prompt-result.fail { border-left-color: #dc3545; }
-    .prompt-result h3 { margin-bottom: 0.75rem; }
-    .prompt-result .meta { font-weight: normal; color: #6c757d; font-size: 0.85rem; }
-    details { margin-bottom: 0.75rem; }
-    summary { cursor: pointer; font-weight: 500; padding: 0.25rem 0; }
-    pre { background: #f1f3f5; padding: 1rem; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; margin-top: 0.5rem; white-space: pre-wrap; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #dee2e6; }
-    th { background: #f1f3f5; font-weight: 600; }
-    tr.fail { background: #fff5f5; }
-    tr.pass { background: #f0fff0; }
-  </style>
-</head>
-<body>
-  <h1>prompt-lock Report</h1>
-  <p style="color: #6c757d; margin-bottom: 1.5rem;">${new Date().toISOString()}</p>
-  <div class="summary">
-    <span class="stat">Total: ${total}</span>
-    <span class="stat pass-count">Passed: ${passed}</span>
-    ${failed > 0 ? `<span class="stat fail-count">Failed: ${failed}</span>` : ''}
-  </div>
-  ${resultRows}
-</body>
-</html>`;
+  const body = `
+    <header>
+      <h1>prompt-lock report</h1>
+      <div class="subtitle">${new Date().toLocaleString()}</div>
+    </header>
+    ${summaryCards}
+    ${promptCards}
+  `;
 
   await ensureDir(outputDir);
-  await fs.promises.writeFile(filePath, html, 'utf-8');
+  await fs.promises.writeFile(filePath, renderHtmlShell('prompt-lock report', body), 'utf-8');
   return filePath;
 }
 
@@ -389,6 +685,113 @@ export async function generateABMarkdownReport(
 
   await ensureDir(outputDir);
   await fs.promises.writeFile(filePath, md, 'utf-8');
+  return filePath;
+}
+
+export async function generateABHtmlReport(
+  result: ABComparisonResult,
+  outputDir: string = DEFAULT_REPORT_DIR,
+): Promise<string> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filePath = path.join(outputDir, `ab-${timestamp}.html`);
+
+  const { variantA: a, variantB: b, winner, deltas } = result;
+  const winnerSide = winner === 'tie' ? 'none' : winner;
+
+  // Compute winner subtext based on which metrics favor the winner
+  const reasons: string[] = [];
+  if (deltas.latencyMs !== 0) {
+    const pct = Math.abs(deltas.latencyMs) / Math.max(a.duration, b.duration) * 100;
+    if (pct >= 10) {
+      const faster = deltas.latencyMs < 0 ? 'B' : 'A';
+      if (faster === winner) reasons.push(`${pct.toFixed(0)}% faster`);
+    }
+  }
+  if (deltas.costDollars !== 0 && Math.max(a.cost ?? 0, b.cost ?? 0) > 0) {
+    const pct = Math.abs(deltas.costDollars) / Math.max(a.cost ?? 0, b.cost ?? 0) * 100;
+    if (pct >= 5) {
+      const cheaper = deltas.costDollars < 0 ? 'B' : 'A';
+      if (cheaper === winner) reasons.push(`${pct.toFixed(0)}% cheaper`);
+    }
+  }
+
+  // Render delta bars — normalize to fill width proportionally
+  function deltaBar(label: string, aVal: number, bVal: number, unit: string, lowerIsBetter = true): string {
+    const max = Math.max(aVal, bVal);
+    if (max === 0) return '';
+    const aPct = (aVal / max) * 100;
+    const bPct = (bVal / max) * 100;
+    return `
+      <div class="delta-bar">
+        <div class="label"><span>${label}</span><span class="mono">A: ${aVal}${unit} · B: ${bVal}${unit}</span></div>
+        <div class="track"><div class="fill a" style="width:${aPct}%"></div></div>
+        <div class="track" style="margin-top:4px"><div class="fill b" style="width:${bPct}%"></div></div>
+      </div>
+    `;
+  }
+
+  const showCost = (a.cost ?? 0) > 0 || (b.cost ?? 0) > 0;
+  const showTokens = (a.tokens?.totalTokens ?? 0) > 0 || (b.tokens?.totalTokens ?? 0) > 0;
+
+  function variantCard(label: 'A' | 'B', r: RunResult): string {
+    const isWinner = winnerSide === label;
+    const passCount = r.assertions.filter(x => x.passed).length;
+    return `
+      <div class="variant-card ${isWinner ? 'winner' : ''}">
+        <div class="variant-label">${isWinner ? '★ WINNER · ' : ''}VARIANT ${label}</div>
+        <h3>${escapeHtml(r.id)}</h3>
+        <div class="meta" style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">${escapeHtml(r.provider)}/${escapeHtml(r.model)}</div>
+        <div class="variant-metrics">
+          <div class="m"><div class="label">Status</div><div class="value" style="color: ${r.passed ? 'var(--pass)' : 'var(--fail)'}">${r.passed ? '✓' : '✗'} ${passCount}/${r.assertions.length}</div></div>
+          <div class="m"><div class="label">Latency</div><div class="value">${r.duration}ms</div></div>
+          ${showCost ? `<div class="m"><div class="label">Cost</div><div class="value">$${(r.cost ?? 0).toFixed(6)}</div></div>` : ''}
+          ${showTokens ? `<div class="m"><div class="label">Tokens</div><div class="value">${r.tokens?.totalTokens ?? 0}</div></div>` : ''}
+        </div>
+        <div class="assertions" style="margin-top: 1rem;">
+          ${renderAssertionChips(r.assertions)}
+        </div>
+        <details>
+          <summary>Output preview</summary>
+          <pre>${escapeHtml((r.output || '').slice(0, 1500))}</pre>
+        </details>
+      </div>
+    `;
+  }
+
+  const winnerBanner = winner === 'tie' ? `
+    <div class="winner-banner" style="border-color: var(--warn);">
+      <div class="trophy">⚖️</div>
+      <h2 style="color: var(--warn);">Tie</h2>
+      <div class="subtext">Variants are equivalent on all measured metrics</div>
+    </div>
+  ` : `
+    <div class="winner-banner">
+      <div class="trophy">🏆</div>
+      <h2>Variant ${winner} wins</h2>
+      <div class="subtext">${reasons.length > 0 ? reasons.join(' · ') : 'Higher pass rate'}</div>
+    </div>
+  `;
+
+  const body = `
+    <header>
+      <h1>A/B comparison</h1>
+      <div class="subtitle">${escapeHtml(result.id)} · ${new Date().toLocaleString()}</div>
+    </header>
+    ${winnerBanner}
+    <div class="ab-grid">
+      ${variantCard('A', a)}
+      ${variantCard('B', b)}
+    </div>
+    <div style="background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
+      <h3 style="margin-bottom: 1rem;">Metric comparison</h3>
+      ${deltaBar('Latency', a.duration, b.duration, 'ms')}
+      ${showCost ? deltaBar('Cost', a.cost ?? 0, b.cost ?? 0, '') : ''}
+      ${showTokens ? deltaBar('Tokens', a.tokens?.totalTokens ?? 0, b.tokens?.totalTokens ?? 0, '') : ''}
+    </div>
+  `;
+
+  await ensureDir(outputDir);
+  await fs.promises.writeFile(filePath, renderHtmlShell(`A/B: ${result.id}`, body), 'utf-8');
   return filePath;
 }
 

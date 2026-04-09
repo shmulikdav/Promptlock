@@ -245,6 +245,7 @@ prompt-lock run --concurrency 10   # Max concurrent runs (default: 5)
 prompt-lock run --cache            # Cache LLM outputs (skip unchanged prompts)
 prompt-lock run --watch            # Watch for file changes and re-run
 prompt-lock run --ab v1:v2         # A/B compare two prompt IDs side-by-side
+prompt-lock run --no-open          # Don't auto-open the HTML report in browser
 prompt-lock run --github-pr owner/repo#123  # Post results as PR comment
 ```
 
@@ -306,7 +307,7 @@ Compare two prompt variants side-by-side and pick a winner:
 prompt-lock run --ab summarizer-v1:summarizer-v2
 ```
 
-Output:
+You get a console table + a **dark-themed HTML comparison report** that opens automatically in your browser:
 
 ```
 A/B Comparison: summarizer-v1 vs summarizer-v2
@@ -320,6 +321,8 @@ A/B Comparison: summarizer-v1 vs summarizer-v2
 
 Winner: Variant B
 ```
+
+The HTML report includes a winner banner, side-by-side variant cards, assertion chips, delta bars for each metric, and collapsible output previews. Ship it as an artifact in CI or open it locally during development. Use `--no-open` to skip the browser launch.
 
 **Winner logic:**
 1. Higher pass rate wins

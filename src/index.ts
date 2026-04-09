@@ -112,6 +112,7 @@ export {
   generateMarkdownReport,
   printABReport,
   generateABMarkdownReport,
+  generateABHtmlReport,
 } from './reporter';
 export { estimateCost, getPricingTable } from './pricing';
 export { loadDataset } from './dataset-loader';

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-09
+
+### Added
+
+- **Dark-themed HTML reports** — completely redesigned with GitHub-style dark theme, metric cards, assertion chips, and responsive layout. Single self-contained HTML file per run (no external assets).
+- **A/B HTML report** (`generateABHtmlReport`) — dedicated side-by-side visual comparison with a winner banner, variant cards, and horizontal delta bars showing which metric favors which variant.
+- **Auto-open in browser** — after `prompt-lock run`, generated HTML reports open automatically in your default browser (macOS/Linux/Windows). Skipped in CI and with `--no-open` or `PROMPT_LOCK_NO_OPEN=1`.
+- **A/B mode generates HTML by default** — running `prompt-lock run --ab v1:v2` now produces a beautiful comparison report and opens it. Use `--no-open` to just generate the file.
+- New CLI flag: `--no-open` to disable browser auto-open.
+- New utility export: `openInBrowser(path)` for programmatic use.
+
+### Changed
+
+- `generateHtmlReport` completely rewritten — dark theme, metric summary cards, better typography, collapsible sections. Output is smaller and more scannable.
+
 ## [0.4.0] - 2026-04-09
 
 ### Added
